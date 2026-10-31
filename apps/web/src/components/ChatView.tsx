@@ -284,6 +284,7 @@ import {
   WorkspaceTitlebarControls,
 } from "./chat/PanelLayoutControls";
 import type { ExpandedImagePreview } from "./chat/ExpandedImagePreview";
+import { ProviderUsageStrip } from "./chat/ProviderUsageStrip";
 import { ThreadDetailsPanel } from "./chat/ThreadDetailsPanel";
 import { NoActiveThreadState } from "./NoActiveThreadState";
 import {
@@ -3173,6 +3174,15 @@ export default function ChatView(props: ChatViewProps) {
     onToggleTerminal: toggleTerminalVisibilityStable,
     onToggleThreadPanel: toggleThreadPanelStable,
     onToggleRightPanel: toggleRightPanelStable,
+    // Grid tiles opt out of the titlebar inset; the grid header shows usage once for all tiles.
+    usageStrip: reserveTitleBarControlInset ? (
+      <ProviderUsageStrip
+        providers={providerStatuses}
+        sources={serverConfig?.usageLimitSources ?? EMPTY_USAGE_LIMIT_SOURCES}
+        activeProviderInstanceId={activeProviderInstanceId}
+        contextUsedPercent={activeContextWindow?.usedPercentage ?? null}
+      />
+    ) : null,
   } satisfies PanelLayoutControlsProps;
   const panelToggleControls = (
     <PanelLayoutControls

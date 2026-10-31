@@ -1,6 +1,7 @@
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "./ui/empty";
 import { SidebarInset } from "./ui/sidebar";
 import { isElectron } from "../env";
+import { PrimaryEnvironmentUsageStrip } from "./chat/ProviderUsageStrip";
 import { WorkspacePageHeader } from "./WorkspacePageHeader";
 
 export function NoActiveThreadState() {
@@ -17,6 +18,9 @@ export function NoActiveThreadState() {
               </span>
             </div>
           )}
+          <div className="ml-auto hidden h-full [-webkit-app-region:no-drag] md:flex">
+            <PrimaryEnvironmentUsageStrip trailingSeparator={false} />
+          </div>
         </WorkspacePageHeader>
 
         <Empty className="flex-1">

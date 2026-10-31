@@ -28,6 +28,7 @@ export interface PanelLayoutControlsProps {
   onToggleTerminal: () => void;
   onToggleThreadPanel: () => void;
   onToggleRightPanel: () => void;
+  usageStrip?: ReactNode;
 }
 
 export const PanelLayoutControls = memo(function PanelLayoutControls({
@@ -48,6 +49,7 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
   onToggleTerminal,
   onToggleThreadPanel,
   onToggleRightPanel,
+  usageStrip,
 }: PanelLayoutControlsProps) {
   const threadPanelToggle = (
     <Toggle
@@ -82,6 +84,7 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
       className="flex h-full shrink-0 items-center gap-1 [-webkit-app-region:no-drag]"
       data-panel-layout-controls
     >
+      {usageStrip ? <div className="hidden h-full md:flex">{usageStrip}</div> : null}
       {showThreadPanelControl ? threadPanelControl : null}
       {showTerminalControl ? (
         <Tooltip>

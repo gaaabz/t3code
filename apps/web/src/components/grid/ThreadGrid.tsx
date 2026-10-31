@@ -4,6 +4,7 @@ import { LayoutGridIcon, Maximize2Icon, XIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { GridLayout, getCompactor } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
+import { PrimaryEnvironmentUsageStrip } from "../chat/ProviderUsageStrip";
 
 import { useComposerDraftStore } from "../../composerDraftStore";
 import { ComposerHandleContext, useComposerHandleContext } from "../../composerHandleContext";
@@ -185,6 +186,9 @@ export function ThreadGrid() {
         <LayoutGridIcon className="size-4 text-muted-foreground" />
         <span className="text-sm font-medium">Grid</span>
         <div className="ml-auto" />
+        <div className="hidden h-full [-webkit-app-region:no-drag] md:flex">
+          <PrimaryEnvironmentUsageStrip />
+        </div>
         <GridNewChatMenu />
         <Button
           className="[-webkit-app-region:no-drag]"

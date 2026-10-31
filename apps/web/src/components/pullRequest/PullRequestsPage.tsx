@@ -51,6 +51,7 @@ import {
   writePullRequestListPreferences,
 } from "./pullRequestListPreferences";
 import { environmentMachineIcon } from "../EnvironmentMachineIcon";
+import { PrimaryEnvironmentUsageStrip } from "../chat/ProviderUsageStrip";
 import { PullRequestDetailPanel } from "./PullRequestDetailPanel";
 import {
   PullRequestFiltersMenu,
@@ -1116,6 +1117,7 @@ export function PullRequestsPage() {
       rightPanelUnavailableLabel="Select a pull request first"
       onToggleTerminal={() => undefined}
       onToggleRightPanel={toggleRightPanel}
+      usageStrip={<PrimaryEnvironmentUsageStrip />}
     />
   );
   const openPanelControls = (
