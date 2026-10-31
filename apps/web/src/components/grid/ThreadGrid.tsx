@@ -1,11 +1,13 @@
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { useNavigate } from "@tanstack/react-router";
 import { LayoutGridIcon, Maximize2Icon, XIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { GridLayout, getCompactor } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 
 import { useComposerDraftStore } from "../../composerDraftStore";
+import { ComposerHandleContext, useComposerHandleContext } from "../../composerHandleContext";
+import type { ChatComposerHandle } from "../chat/ChatComposer";
 import { useQuietThreadShell } from "../../state/entities";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import {
@@ -72,6 +74,11 @@ function ThreadGridTileView({
   }, [awaitingPromotion, draftId, promotedTo]);
   const retargetDraft = (draft: ThreadGridDraft) =>
     useThreadGridStore.getState().retargetDraft(tile.key, draft);
+  // The app-wide composer handle (command palette, file browser) must point at the focused tile only;
+  // sharing it would let the last mounted tile capture every composer focus.
+  const appComposerRef = useComposerHandleContext();
+  const tileComposerRef = useRef<ChatComposerHandle | null>(null);
+  const composerRef = active && appComposerRef ? appComposerRef : tileComposerRef;
   const isDraft = draftId !== null;
   const draftLost = isDraft && draftSession === null && promotedTo === null;
   const deleted = !isDraft && shell?.deletedAt != null;
@@ -125,26 +132,28 @@ function ThreadGridTileView({
           </div>
         ) : (
           <BackgroundThreadContext value={!active}>
-            <GridDraftTileContext value={isDraft ? retargetDraft : null}>
-              {draftId !== null && draftSession !== null ? (
-                <ChatView
-                  key={chatKey}
-                  draftId={draftId}
-                  environmentId={draftSession.environmentId}
-                  threadId={draftSession.threadId}
-                  routeKind="draft"
-                  reserveTitleBarControlInset={false}
-                />
-              ) : (
-                <ChatView
-                  key={chatKey}
-                  environmentId={promotedTo?.environmentId ?? tile.environmentId}
-                  threadId={promotedTo?.threadId ?? tile.threadId}
-                  routeKind="server"
-                  reserveTitleBarControlInset={false}
-                />
-              )}
-            </GridDraftTileContext>
+            <ComposerHandleContext value={composerRef}>
+              <GridDraftTileContext value={isDraft ? retargetDraft : null}>
+                {draftId !== null && draftSession !== null ? (
+                  <ChatView
+                    key={chatKey}
+                    draftId={draftId}
+                    environmentId={draftSession.environmentId}
+                    threadId={draftSession.threadId}
+                    routeKind="draft"
+                    reserveTitleBarControlInset={false}
+                  />
+                ) : (
+                  <ChatView
+                    key={chatKey}
+                    environmentId={promotedTo?.environmentId ?? tile.environmentId}
+                    threadId={promotedTo?.threadId ?? tile.threadId}
+                    routeKind="server"
+                    reserveTitleBarControlInset={false}
+                  />
+                )}
+              </GridDraftTileContext>
+            </ComposerHandleContext>
           </BackgroundThreadContext>
         )}
       </div>
