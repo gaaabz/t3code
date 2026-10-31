@@ -1,0 +1,90 @@
+name: Fork release
+
+# Merges pingdotgg/t3code main into this fork's main, then builds an unsigned
+# Windows installer whose updater follows this fork's releases.
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: fork-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: github.repository == 'gaaabz/t3code'
+    runs-on: windows-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          # GITHUB_TOKEN cannot push commits that touch .github/workflows, and upstream often does.
+          token: ${{ secrets.FORK_SYNC_TOKEN || github.token }}
+
+      - name: Merge upstream main
+        id: sync
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/pingdotgg/t3code.git
+          git fetch --no-tags upstream main
+          git merge --no-edit upstream/main
+          git push origin HEAD:main
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          # Forks inherit upstream tags, so only a tag with a release here means HEAD already shipped.
+          if [[ "$GITHUB_EVENT_NAME" == "schedule" ]]; then
+            for tag in $(git tag --points-at HEAD --list 'v*-nightly.*'); do
+              if gh release view "$tag" > /dev/null 2>&1; then
+                echo "skip=true" >> "$GITHUB_OUTPUT"
+              fi
+            done
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Resolve version
+        if: steps.sync.outputs.skip != 'true'
+        id: version
+        run: |
+          base=$(node -p 'require("./apps/desktop/package.json").version')
+          echo "version=${base%%-*}-nightly.$(date -u +%Y%m%d).${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+
+      - uses: ./.github/actions/setup-ci-deps
+        if: steps.sync.outputs.skip != 'true'
+
+      - name: Align package versions
+        if: steps.sync.outputs.skip != 'true'
+        run: node scripts/update-release-package-versions.ts "${{ steps.version.outputs.version }}"
+
+      - name: Build installer
+        if: steps.sync.outputs.skip != 'true'
+        env:
+          T3CODE_DESKTOP_UPDATE_REPOSITORY: ${{ github.repository }}
+        run: |
+          vp run dist:desktop:artifact --platform win --target nsis --arch x64 \
+            --build-version "${{ steps.version.outputs.version }}" --verbose
+
+      - name: Publish release
+        if: steps.sync.outputs.skip != 'true'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          target_commitish: ${{ steps.sync.outputs.sha }}
+          name: T3 Code (fork) ${{ steps.version.outputs.version }}
+          prerelease: true
+          files: |
+            release/*.exe
+            release/*.blockmap
+            release/nightly.yml
+          fail_on_unmatched_files: true
