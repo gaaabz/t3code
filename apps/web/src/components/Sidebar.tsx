@@ -169,6 +169,7 @@ import {
   buildThreadActionMenuItems,
   threadActionRequiresOperate,
 } from "./threadActionMenu.logic";
+import { isThreadInGrid, toggleThreadInGrid } from "./grid/threadGridActions";
 import {
   applySidebarThreadDrop,
   filterSidebarV2VisibleThreads,
@@ -2569,6 +2570,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 canShareWithGuestAtom(threadRef.environmentId),
               ),
               canTurnIntoProject: canTurnThreadIntoProject(threadRef),
+              isInGrid: isThreadInGrid(threadRef),
               supports: {
                 settlement: configLoaded,
                 autoSettleOptOut: supportsAutoSettleOptOut,
@@ -2737,6 +2739,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             return;
           case "copy-thread-id":
             copyThreadIdToClipboard(thread.id, { threadId: thread.id });
+            return;
+          case "add-to-grid":
+          case "remove-from-grid":
+            toggleThreadInGrid(threadRef);
             return;
           case "archive": {
             if (confirmThreadArchive) {

@@ -74,4 +74,15 @@ describe("buildThreadActionMenuItems", () => {
     expect(items.find((item) => item.id === "archive")?.disabled).toBe(true);
     expect(items.find((item) => item.id === "turn-into-project")?.disabled).toBe(true);
   });
+
+  it.each([
+    [false, "add-to-grid"],
+    [true, "remove-from-grid"],
+  ] as const)("offers the grid action for its membership (in grid: %s)", (isInGrid, id) => {
+    const items = buildThreadActionMenuItems({ ...baseState, canOperate: false, isInGrid });
+    const ids = items.map((item) => item.id);
+    expect(ids).toContain(id);
+    expect(ids).not.toContain(isInGrid ? "add-to-grid" : "remove-from-grid");
+    expect(items.find((item) => item.id === id)?.disabled).toBeFalsy();
+  });
 });

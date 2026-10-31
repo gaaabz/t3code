@@ -21,6 +21,7 @@ import {
   threadActionRequiresOperate,
   type ThreadActionMenuId,
 } from "../components/threadActionMenu.logic";
+import { isThreadInGrid, toggleThreadInGrid } from "../components/grid/threadGridActions";
 import { stackedThreadToast, toastManager } from "../components/ui/toast";
 import { copyThreadReference } from "../lib/copyThreadReference";
 import { threadChipCopyTarget } from "@t3tools/client-runtime/thread-reference";
@@ -148,6 +149,7 @@ export function useThreadActionMenu(input: {
         snoozePresets,
         canShareWithGuest,
         canTurnIntoProject: canTurnThreadIntoProject(threadRef),
+        isInGrid: isThreadInGrid(threadRef),
       });
       const clicked = await settlePromise(() => api.contextMenu.show(items, position));
       if (clicked._tag === "Failure" || clicked.value === null) return;
@@ -299,6 +301,10 @@ export function useThreadActionMenu(input: {
           return;
         case "copy-thread-id":
           copyThreadIdToClipboard(thread.id, { threadId: thread.id });
+          return;
+        case "add-to-grid":
+        case "remove-from-grid":
+          toggleThreadInGrid(threadRef);
           return;
         case "archive": {
           if (confirmThreadArchive) {

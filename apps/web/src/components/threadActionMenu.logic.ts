@@ -26,6 +26,8 @@ export type ThreadActionMenuId =
   | "copy-branch"
   | "copy-thread"
   | "copy-thread-id"
+  | "add-to-grid"
+  | "remove-from-grid"
   | "archive"
   | "delete";
 
@@ -95,6 +97,7 @@ export interface ThreadActionMenuState {
   readonly canShareWithGuest?: boolean;
   /** A No project thread with its own folder, on a server that can promote it. */
   readonly canTurnIntoProject?: boolean;
+  readonly isInGrid?: boolean;
 }
 
 /** Local navigation, read markers, and copying remain available to read-only clients. */
@@ -110,6 +113,8 @@ export function threadActionRequiresOperate(action: ThreadActionMenuId): boolean
     "copy-branch",
     "copy-thread",
     "copy-thread-id",
+    "add-to-grid",
+    "remove-from-grid",
   ].includes(action);
 }
 
@@ -178,6 +183,9 @@ export function buildThreadActionMenuItems(
         ]
       : []),
     { id: "mark-unread", label: "Mark unread", icon: "mail-open" },
+    state.isInGrid
+      ? { id: "remove-from-grid", label: "Remove from grid", icon: "layout-grid" }
+      : { id: "add-to-grid", label: "Add to grid", icon: "layout-grid" },
     ...(state.canShareWithGuest
       ? [{ id: "share-guest" as const, label: "Share with guest", icon: "user-plus" }]
       : []),
