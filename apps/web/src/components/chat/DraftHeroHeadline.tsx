@@ -5,7 +5,7 @@ import { scopedProjectKey, scopeProjectRef } from "@t3tools/client-runtime/envir
 import { isScratchProject } from "@t3tools/client-runtime/state/projects";
 import { FolderPlusIcon } from "lucide-react";
 import { useAtomValue } from "@effect/atom-react";
-import { useRef, useState } from "react";
+import { use, useRef, useState } from "react";
 
 import { openCommandPalette } from "~/commandPaletteBus";
 import { shortcutLabelForCommand } from "~/keybindings";
@@ -45,6 +45,7 @@ import {
 } from "../ui/combobox";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { InlineButton } from "../ui/button";
+import { GridDraftTileContext } from "../grid/gridDraftTileContext";
 import { DraftProjectName } from "./DraftProjectName";
 import { DraftHeroProjectHeading } from "./DraftHeroProjectHeading";
 import { TriageDraftHero } from "./TriageDraftHero";
@@ -90,6 +91,7 @@ export function DraftHeroHeadline({
   const openAddProject = () => openCommandPalette({ open: "add-project" });
   const { scratchEnvironmentId, scratchWorkspaceRootFor, openScratchProject } = useScratchProject();
   const openProjectDraft = useNewThreadHandler();
+  const retargetGridDraft = use(GridDraftTileContext);
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerQuery, setPickerQuery] = useState("");
@@ -190,7 +192,14 @@ export function DraftHeroHeadline({
     pendingScratchRef.current = null;
     const currentDraft = getComposerDraft(draftId);
     if (!composerDraftHasUserContent(currentDraft)) {
-      void openProjectDraft(scopeProjectRef(project.environmentId, project.id));
+      const projectRef = scopeProjectRef(project.environmentId, project.id);
+      if (retargetGridDraft) {
+        void openProjectDraft(projectRef, { navigate: false }).then((opened) => {
+          if (opened) retargetGridDraft({ ...opened, environmentId: project.environmentId });
+        });
+        return;
+      }
+      void openProjectDraft(projectRef);
       return;
     }
     setLogicalProjectDraftThreadId(

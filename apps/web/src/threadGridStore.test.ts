@@ -2,9 +2,11 @@ import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environ
 import { type EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { beforeEach, describe, expect, it } from "vite-plus/test";
 
+import type { DraftId } from "./composerDraftStore";
 import { THREAD_GRID_MAX_TILES, useThreadGridStore } from "./threadGridStore";
 
-const ref = (id: string) => scopeThreadRef("env-1" as EnvironmentId, ThreadId.make(id));
+const env = "env-1" as EnvironmentId;
+const ref = (id: string) => scopeThreadRef(env, ThreadId.make(id));
 const rects = () => useThreadGridStore.getState().tiles.map(({ x, y, w, h }) => ({ x, y, w, h }));
 
 beforeEach(() => {
@@ -60,5 +62,50 @@ describe("threadGridStore", () => {
     useThreadGridStore.getState().activate(scopedThreadKey(ref("a")));
     useThreadGridStore.getState().removeThread(ref("a"));
     expect(useThreadGridStore.getState().activeKey).toBe(scopedThreadKey(ref("b")));
+  });
+
+  it("keeps a draft tile's layout and chat key when the draft becomes its thread", () => {
+    const store = () => useThreadGridStore.getState();
+    const draft = {
+      draftId: "draft-1" as DraftId,
+      environmentId: env,
+      threadId: ThreadId.make("n"),
+    };
+    expect(store().addDraft(draft)).toBe("added");
+    expect(store().addDraft(draft)).toBe("exists");
+    const [tile] = store().tiles;
+
+    store().removeThread(ref("n"));
+    expect(store().tiles).toHaveLength(1);
+
+    store().promoteDraft(draft.draftId, ref("n"));
+    const [promoted] = store().tiles;
+    expect(promoted).toMatchObject({ key: tile!.key, chatKey: "draft-1", threadId: "n" });
+    expect(promoted!.draftId).toBeUndefined();
+    expect(store().addThread(ref("n"))).toBe("exists");
+    expect(store().tiles).toHaveLength(1);
+  });
+
+  it("retargets a draft tile in place when its draft changes project", () => {
+    const store = () => useThreadGridStore.getState();
+    store().addDraft({
+      draftId: "draft-1" as DraftId,
+      environmentId: env,
+      threadId: ThreadId.make("n"),
+    });
+    const [before] = store().tiles;
+    store().retargetDraft(before!.key, {
+      draftId: "draft-2" as DraftId,
+      environmentId: env,
+      threadId: ThreadId.make("m"),
+    });
+    const [after] = store().tiles;
+    expect(after).toMatchObject({ key: before!.key, chatKey: "draft-2", draftId: "draft-2" });
+    expect({ x: after!.x, y: after!.y, w: after!.w, h: after!.h }).toEqual({
+      x: before!.x,
+      y: before!.y,
+      w: before!.w,
+      h: before!.h,
+    });
   });
 });

@@ -1,20 +1,24 @@
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { useNavigate } from "@tanstack/react-router";
 import { LayoutGridIcon, Maximize2Icon, XIcon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { GridLayout, getCompactor } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 
+import { useComposerDraftStore } from "../../composerDraftStore";
 import { useQuietThreadShell } from "../../state/entities";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import {
   THREAD_GRID_COLUMNS,
   THREAD_GRID_ROWS,
+  type ThreadGridDraft,
   type ThreadGridTile,
   useThreadGridStore,
 } from "../../threadGridStore";
 import ChatView from "../ChatView";
 import { BackgroundThreadContext } from "../chat/backgroundThread";
+import { GridDraftTileContext } from "./gridDraftTileContext";
+import { GridNewChatMenu } from "./GridNewChatMenu";
 import { Button } from "../ui/button";
 import { SidebarInset } from "../ui/sidebar";
 import { observeResize } from "~/lib/observeResize";
@@ -52,7 +56,26 @@ function ThreadGridTileView({
   const navigate = useNavigate();
   const threadRef = scopeThreadRef(tile.environmentId, tile.threadId);
   const shell = useQuietThreadShell(threadRef);
-  const available = shell !== null && shell.deletedAt == null;
+  const draftId = tile.draftId ?? null;
+  const draftSession = useComposerDraftStore((store) =>
+    draftId === null ? null : store.getDraftSession(draftId),
+  );
+  const promotedTo = useComposerDraftStore((store) =>
+    draftId === null ? null : store.getPromotedDraftRedirect(draftId),
+  );
+  const awaitingPromotion = draftId !== null && draftSession === null && promotedTo !== null;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- swaps the tile to its server thread once the draft store finalizes the promotion
+  useEffect(() => {
+    if (draftId !== null && awaitingPromotion && promotedTo) {
+      useThreadGridStore.getState().promoteDraft(draftId, promotedTo);
+    }
+  }, [awaitingPromotion, draftId, promotedTo]);
+  const retargetDraft = (draft: ThreadGridDraft) =>
+    useThreadGridStore.getState().retargetDraft(tile.key, draft);
+  const isDraft = draftId !== null;
+  const draftLost = isDraft && draftSession === null && promotedTo === null;
+  const deleted = !isDraft && shell?.deletedAt != null;
+  const chatKey = tile.chatKey ?? tile.key;
   return (
     <div
       className={cn(
@@ -67,7 +90,7 @@ function ThreadGridTileView({
         className="flex h-8 shrink-0 cursor-grab items-center gap-1 border-b border-border/60 pr-1 pl-3 active:cursor-grabbing"
       >
         <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-          {shell?.title || "Thread"}
+          {isDraft ? "New chat" : shell?.title || "Thread"}
         </span>
         <Button
           data-grid-no-drag
@@ -75,10 +98,12 @@ function ThreadGridTileView({
           variant="ghost-muted"
           aria-label="Open full view"
           onClick={() =>
-            void navigate({
-              to: "/$environmentId/$threadId",
-              params: buildThreadRouteParams(threadRef),
-            })
+            void (draftId !== null
+              ? navigate({ to: "/draft/$draftId", params: { draftId } })
+              : navigate({
+                  to: "/$environmentId/$threadId",
+                  params: buildThreadRouteParams(threadRef),
+                }))
           }
         >
           <Maximize2Icon />
@@ -88,23 +113,39 @@ function ThreadGridTileView({
           size="icon-xs"
           variant="ghost-muted"
           aria-label="Remove from grid"
-          onClick={() => useThreadGridStore.getState().removeThread(threadRef)}
+          onClick={() => useThreadGridStore.getState().removeTile(tile.key)}
         >
           <XIcon />
         </Button>
       </div>
       <div className="relative flex min-h-0 flex-1">
-        {available ? (
-          <BackgroundThreadContext value={!active}>
-            <ChatView
-              environmentId={tile.environmentId}
-              threadId={tile.threadId}
-              routeKind="server"
-              reserveTitleBarControlInset={false}
-            />
-          </BackgroundThreadContext>
+        {draftLost || deleted ? (
+          <div className="m-auto text-sm text-muted-foreground">
+            {draftLost ? "This draft is no longer available." : "This thread was deleted."}
+          </div>
         ) : (
-          <div className="m-auto text-sm text-muted-foreground">This thread is unavailable.</div>
+          <BackgroundThreadContext value={!active}>
+            <GridDraftTileContext value={isDraft ? retargetDraft : null}>
+              {draftId !== null && draftSession !== null ? (
+                <ChatView
+                  key={chatKey}
+                  draftId={draftId}
+                  environmentId={draftSession.environmentId}
+                  threadId={draftSession.threadId}
+                  routeKind="draft"
+                  reserveTitleBarControlInset={false}
+                />
+              ) : (
+                <ChatView
+                  key={chatKey}
+                  environmentId={promotedTo?.environmentId ?? tile.environmentId}
+                  threadId={promotedTo?.threadId ?? tile.threadId}
+                  routeKind="server"
+                  reserveTitleBarControlInset={false}
+                />
+              )}
+            </GridDraftTileContext>
+          </BackgroundThreadContext>
         )}
       </div>
     </div>
@@ -134,8 +175,10 @@ export function ThreadGrid() {
       <div className="drag-region flex h-[var(--workspace-topbar-height)] shrink-0 items-center gap-2 border-b border-border px-4 wco:pr-(--workspace-native-controls-inset)">
         <LayoutGridIcon className="size-4 text-muted-foreground" />
         <span className="text-sm font-medium">Grid</span>
+        <div className="ml-auto" />
+        <GridNewChatMenu />
         <Button
-          className="ml-auto [-webkit-app-region:no-drag]"
+          className="[-webkit-app-region:no-drag]"
           size="xs"
           variant="ghost-muted"
           disabled={tiles.length === 0}
@@ -148,7 +191,10 @@ export function ThreadGrid() {
         {tiles.length === 0 ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-center text-sm text-muted-foreground">
             <span>No threads in the grid yet.</span>
-            <span>Right-click a thread in the sidebar and choose "Add to grid".</span>
+            <span>
+              Start one with "New chat", or right-click a thread in the sidebar and choose "Add to
+              grid".
+            </span>
           </div>
         ) : size.width > 0 ? (
           <GridLayout
