@@ -3254,6 +3254,15 @@ export default function ChatView(props: ChatViewProps) {
       }}
     />
   ) : null;
+  // Grid tiles opt out of the titlebar inset; the grid header shows usage once for all tiles.
+  const usageStrip = reserveTitleBarControlInset ? (
+    <ProviderUsageStrip
+      providers={providerStatuses}
+      sources={serverConfig?.usageLimitSources ?? EMPTY_USAGE_LIMIT_SOURCES}
+      activeProviderInstanceId={activeProviderInstanceId}
+      contextUsedPercent={activeContextWindow?.usedPercentage ?? null}
+    />
+  ) : null;
   const panelToggleControlProps = {
     terminalAvailable: activeProject !== null,
     terminalOpen: terminalUiState.terminalOpen,
@@ -3268,15 +3277,8 @@ export default function ChatView(props: ChatViewProps) {
     onToggleTerminal: toggleTerminalVisibilityStable,
     onToggleThreadPanel: toggleThreadPanelStable,
     onToggleRightPanel: toggleRightPanelStable,
-    // Grid tiles opt out of the titlebar inset; the grid header shows usage once for all tiles.
-    usageStrip: reserveTitleBarControlInset ? (
-      <ProviderUsageStrip
-        providers={providerStatuses}
-        sources={serverConfig?.usageLimitSources ?? EMPTY_USAGE_LIMIT_SOURCES}
-        activeProviderInstanceId={activeProviderInstanceId}
-        contextUsedPercent={activeContextWindow?.usedPercentage ?? null}
-      />
-    ) : null,
+    // The fixed titlebar controls overlay the inline panel's tab bar, which only reserves icon space.
+    usageStrip: inlineRightPanelOwnsTitleBar ? null : usageStrip,
   } satisfies PanelLayoutControlsProps;
   const panelToggleControls = (
     <PanelLayoutControls
@@ -3972,6 +3974,7 @@ export default function ChatView(props: ChatViewProps) {
           keybindings={keybindings}
           getShortcutContext={getShortcutContextStable}
           maximized={rightPanelMaximized}
+          titlebarAccessory={inlineRightPanelOwnsTitleBar ? usageStrip : null}
           layoutControls={
             rightPanelOpen ? (
               <div className="mr-px flex items-center gap-1">
