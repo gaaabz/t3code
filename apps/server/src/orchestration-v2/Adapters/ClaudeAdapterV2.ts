@@ -537,6 +537,7 @@ export interface ClaudeAgentSdkQuerySession {
     mode: PermissionMode,
   ) => Effect.Effect<void, ClaudeAgentSdkQueryRunnerError>;
   readonly stopTask: (taskId: string) => Effect.Effect<void, ClaudeAgentSdkQueryRunnerError>;
+  readonly reloadExtensions: Effect.Effect<void, ClaudeAgentSdkQueryRunnerError>;
   readonly backgroundTasks: (
     toolUseId: string,
   ) => Effect.Effect<boolean, ClaudeAgentSdkQueryRunnerError>;
@@ -743,6 +744,11 @@ export type ClaudeAgentSdkProtocolLogEvent =
         readonly type: "query.stop_task";
         readonly taskId: string;
       };
+    }
+  | {
+      readonly direction: "outgoing";
+      readonly stage: "decoded";
+      readonly payload: { readonly type: "query.reload_extensions" };
     }
   | {
       readonly direction: "outgoing";
@@ -1224,6 +1230,21 @@ export const layerQueryRunner: Layer.Layer<
                   }),
                 ),
               ),
+            reloadExtensions: Effect.tryPromise({
+              try: async () => {
+                await queryRuntime.reloadPlugins();
+                await queryRuntime.reloadSkills();
+              },
+              catch: (cause) => queryRunnerError(cause, "reloadExtensions"),
+            }).pipe(
+              Effect.tap(() =>
+                logProtocolEvent({
+                  direction: "outgoing",
+                  stage: "decoded",
+                  payload: { type: "query.reload_extensions" },
+                }),
+              ),
+            ),
             backgroundTasks: (toolUseId) =>
               Effect.tryPromise({
                 try: () => queryRuntime.backgroundTasks(toolUseId),
@@ -11313,6 +11334,27 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                   new ProviderAdapter.ProviderAdapterProtocolError({
                     driver: CLAUDE_PROVIDER,
                     detail: "Workflow stop request failed",
+                    cause,
+                  }),
+              ),
+            );
+          }),
+          reloadSession: Effect.fn("ClaudeAdapterV2.reloadSession")(function* ({ providerThread }) {
+            const liveQuery = yield* Ref.get(queryContext);
+            // Without a reusable query, the next turn opens one that reads everything from disk.
+            if (
+              liveQuery === null ||
+              liveQuery.stopping ||
+              liveQuery.nativeThreadId !== providerThread.nativeThreadRef?.nativeId
+            ) {
+              return;
+            }
+            yield* liveQuery.query.reloadExtensions.pipe(
+              Effect.mapError(
+                (cause) =>
+                  new ProviderAdapter.ProviderAdapterProtocolError({
+                    driver: CLAUDE_PROVIDER,
+                    detail: "Reloading plugins and skills failed",
                     cause,
                   }),
               ),

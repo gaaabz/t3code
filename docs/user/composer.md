@@ -239,9 +239,12 @@ provider. On mobile, both are also available before starting a thread on
 The slash menu also includes skills unless you turn off **Settings → Chat →
 Show skills in slash menu**, under Advanced. Only skills enabled for the provider are listed.
 
-After you add or change skills, plugins, or MCP servers, use **Restart agent
-session** in the command palette on web and desktop. The conversation continues,
-and your next message starts the agent again with the new setup.
+After you add or change skills, plugins, or extensions, send `/reload` or use
+**Reload agent session** in the command palette on web and desktop. Claude and
+Pi reload them in place. Other providers restart: the conversation continues,
+and your next message starts the agent again with the new setup. If a change
+still does not show up, such as a new MCP server, use **Restart agent
+session**.
 
 Provider commands must start the message to run. T3 Code commands such as
 `/model` and `/plan`, and skill mentions, work on any line.

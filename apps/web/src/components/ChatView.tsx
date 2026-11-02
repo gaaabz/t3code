@@ -185,6 +185,7 @@ import { cn } from "~/lib/utils";
 import { isModelPickerOpen } from "../modelPickerVisibility";
 import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "~/workspaceTitlebar";
 import { toastManager } from "./ui/toast";
+import { useReloadThreadSession } from "../hooks/useReloadThreadSession";
 import { projectScriptIdFromCommand } from "~/projectScripts";
 import { newMessageId } from "~/lib/utils";
 import { isInSideChatPane, type SideChatParentPanel } from "~/lib/sideChatPane";
@@ -2530,6 +2531,22 @@ export default function ChatView(props: ChatViewProps) {
   };
   const toggleKeepFullHistory = () => setKeepFullHistory(routeThreadKey, !keepFullHistory);
   const toggleKeepFullHistoryStable = useStableCallback(toggleKeepFullHistory);
+  const reloadThreadSession = useReloadThreadSession();
+  const reloadSessionStable = useStableCallback(() => {
+    if (serverThread === null) return;
+    void reloadThreadSession({
+      environmentId: serverThread.environmentId,
+      threadId: serverThread.id,
+      instanceId: activeRuntime?.providerInstanceId ?? serverThread.modelSelection.instanceId,
+      cwd: serverThread.worktreePath ?? activeProject?.workspaceRoot ?? null,
+    }).catch((error: unknown) => {
+      toastManager.add({
+        type: "error",
+        title: "Could not reload the agent session",
+        ...(error instanceof Error ? { description: error.message } : {}),
+      });
+    });
+  });
   const handleRestoreThreadBranch = () => {
     if (!canWriteSourceControl) return;
     if (gitStatusQuery.data?.hasWorkingTreeChanges) {
@@ -3676,6 +3693,9 @@ export default function ChatView(props: ChatViewProps) {
                                 !composerHasNonPromptContent
                                   ? openUsageLimits
                                   : undefined
+                              }
+                              onReloadSessionCommand={
+                                isServerThread && !isWorking ? reloadSessionStable : undefined
                               }
                               environmentUnavailable={activeEnvironmentUnavailableState}
                               activePendingApproval={activePendingApproval}

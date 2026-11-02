@@ -373,6 +373,12 @@ export function createThreadEnvironmentAtoms<R, E>(
       scheduler,
       concurrency,
     }),
+    reloadSession: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:commands:thread:reload-session",
+      tag: WS_METHODS.providerReloadSession,
+      scheduler,
+      concurrency,
+    }),
   };
   const optimistic = createOptimisticThreadLifecycle(snapshotAtom);
   return {

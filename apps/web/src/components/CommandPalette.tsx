@@ -67,6 +67,7 @@ import {
   LinkIcon,
   MessageSquareIcon,
   PaletteIcon,
+  RefreshCwIcon,
   RotateCcwIcon,
   SettingsIcon,
   MonitorIcon,
@@ -93,6 +94,7 @@ import { isDesktopLocalConnectionTarget } from "../connection/desktopLocal";
 import { useDesktopLocalBootstraps } from "../connection/useDesktopLocalBootstraps";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { useOpenPanelPullRequestUrl } from "../hooks/useOpenPanelPullRequestUrl";
+import { useReloadThreadSession } from "../hooks/useReloadThreadSession";
 import { copyThreadReference } from "../lib/copyThreadReference";
 import {
   queueWorkspaceFocusFromPalette,
@@ -455,6 +457,7 @@ function OpenCommandPaletteDialog(props: {
   const refreshProviders = useAtomCommand(serverEnvironment.refreshProviders, {
     reportFailure: false,
   });
+  const reloadThreadSession = useReloadThreadSession();
   const { environments } = useEnvironments();
   const desktopLocalBootstraps = useDesktopLocalBootstraps();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
@@ -1416,8 +1419,24 @@ function OpenCommandPaletteDialog(props: {
     const thread = activeThread;
     actionItems.push({
       kind: "action",
+      value: "action:reload-agent-session",
+      searchTerms: ["reload", "refresh", "agent", "session", "skills", "plugins", "extensions"],
+      title: "Reload agent session",
+      icon: <RefreshCwIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        const project = projectByKey.get(`${thread.environmentId}:${thread.projectId}`);
+        await reloadThreadSession({
+          environmentId: thread.environmentId,
+          threadId: thread.id,
+          instanceId: thread.runtime?.providerInstanceId ?? thread.modelSelection.instanceId,
+          cwd: thread.worktreePath ?? project?.workspaceRoot ?? null,
+        });
+      },
+    });
+    actionItems.push({
+      kind: "action",
       value: "action:restart-agent-session",
-      searchTerms: ["restart", "reset", "reload", "agent", "session", "skills", "plugins", "mcp"],
+      searchTerms: ["restart", "reset", "agent", "session", "mcp"],
       title: "Restart agent session",
       icon: <RotateCcwIcon className={ITEM_ICON_CLASS} />,
       run: async () => {

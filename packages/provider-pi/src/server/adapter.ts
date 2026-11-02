@@ -41,7 +41,11 @@ import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
 import { providerMessageTextWithAttachmentPaths } from "@t3tools/provider-core/server/attachmentPrompt";
 import { mcpToolPresentation } from "@t3tools/provider-core/server/mcpToolPresentation";
 import * as McpProviderSessions from "@t3tools/provider-core/server/McpProviderSessions";
-import { parsePiCompactCommand, type PiCompactCommand } from "./commands.ts";
+import {
+  parsePiCompactCommand,
+  parsePiDiscoveredCommands,
+  type PiCompactCommand,
+} from "./commands.ts";
 import { mergeProviderInstanceEnvironment } from "@t3tools/provider-core/server/instanceEnvironment";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
@@ -70,7 +74,7 @@ import {
   materializePiT3McpExtension,
   resolvePiLaunchArgs,
 } from "./mcpInjection.ts";
-import { PI_FILE_CHANGE_TOOLS } from "./mcpExtensionSource.ts";
+import { PI_FILE_CHANGE_TOOLS, PI_T3_RELOAD_COMMAND } from "./mcpExtensionSource.ts";
 
 export const PI_PROVIDER = ProviderDriverKind.make("pi");
 const PI_DRIVER_KIND = PI_PROVIDER;
@@ -82,6 +86,8 @@ const PI_INHERIT_MODEL_SLUG = "default";
 const STREAM_FLUSH_MS = 50;
 const PI_REQUEST_TIMEOUT_MS = 15_000;
 const PI_SESSION_TIMEOUT_MS = 60_000;
+// Reload restarts every extension; with a typical set it takes about 20s.
+const PI_RELOAD_TIMEOUT_MS = 180_000;
 const PI_UNSOLICITED_ACTIVITY_ERROR =
   "Pi started agent work outside an active T3 turn. The session was stopped to prevent invisible tool execution.";
 const SETTLE_PROBE_MAX_ATTEMPTS = 3;
@@ -2441,6 +2447,34 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
             ...turnInput,
             message: { ...turnInput.message, text: "/compact" },
           }),
+        reloadSession: Effect.fn("PiAdapter.reloadSession")(function* ({ providerThread }) {
+          const state = threadState;
+          if (
+            state === null ||
+            state.providerThread.nativeThreadRef?.nativeId !==
+              providerThread.nativeThreadRef?.nativeId
+          ) {
+            return yield* protocolError(
+              "Pi reload requested for a thread this session does not host",
+            );
+          }
+          if (state.activeTurn !== null) {
+            return yield* protocolError("Cannot reload Pi while a turn is running");
+          }
+          // An unknown slash command would run as a prompt, so confirm the extension registered it.
+          const { slashCommands } = parsePiDiscoveredCommands(
+            yield* request({ type: "get_commands" }).pipe(
+              Effect.mapError((cause) => protocolError("Pi command listing failed", cause)),
+            ),
+          );
+          if (!slashCommands.some((command) => command.name === PI_T3_RELOAD_COMMAND)) {
+            return yield* protocolError("The T3 Code Pi extension is not loaded in this session");
+          }
+          yield* request(
+            { type: "prompt", message: `/${PI_T3_RELOAD_COMMAND}` },
+            PI_RELOAD_TIMEOUT_MS,
+          ).pipe(Effect.mapError((cause) => protocolError("Pi reload failed", cause)));
+        }),
         startTurn: Effect.fn("PiAdapter.startTurn")(
           function* (turnInput) {
             if (rollbackBarrier !== null)

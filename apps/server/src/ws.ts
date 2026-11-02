@@ -75,6 +75,7 @@ import {
   ProjectWriteFileError,
   ProjectMutationError,
   ProviderUploadFeedbackError,
+  ProviderReloadSessionError,
   ProviderSetupError,
   RelayClientInstallFailedError,
   type RelayClientInstallProgressEvent,
@@ -2495,6 +2496,36 @@ export const layerWsRpc = (
                         threadId: input.threadId,
                         cause,
                       }),
+                ),
+              ),
+          ),
+        [WS_METHODS.providerReloadSession]:
+          /* Request instrumentation already owns the span; keep this helper in that context. */
+          Effect.fnUntraced(
+            function* (input) {
+              const projection = yield* threadManagement.getThreadRecords(input.threadId, [
+                "providerThreads",
+              ]);
+              const providerThread =
+                projection.providerThreads.find(
+                  (candidate) => candidate.id === projection.thread.activeProviderThreadId,
+                ) ?? projection.providerThreads.at(-1);
+              const providerSessionId = providerThread?.providerSessionId ?? null;
+              const runtime =
+                providerSessionId === null
+                  ? null
+                  : Option.getOrNull(yield* providerSessionsV2.get(providerSessionId));
+              if (providerThread === undefined || runtime === null) {
+                return { outcome: "not-running" as const };
+              }
+              if (runtime.reloadSession === undefined) return { outcome: "unsupported" as const };
+              yield* runtime.reloadSession({ providerThread });
+              return { outcome: "reloaded" as const };
+            },
+            (effect, input) =>
+              effect.pipe(
+                Effect.mapError(
+                  (cause) => new ProviderReloadSessionError({ threadId: input.threadId, cause }),
                 ),
               ),
           ),

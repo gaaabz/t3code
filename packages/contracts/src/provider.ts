@@ -32,6 +32,28 @@ export const ProviderUploadFeedbackInput = Schema.Struct({
 });
 export type ProviderUploadFeedbackInput = typeof ProviderUploadFeedbackInput.Type;
 
+export const ProviderReloadSessionInput = Schema.Struct({
+  threadId: ThreadId,
+});
+export type ProviderReloadSessionInput = typeof ProviderReloadSessionInput.Type;
+
+export const ProviderReloadSessionResult = Schema.Struct({
+  outcome: Schema.Literals(["reloaded", "unsupported", "not-running"]),
+});
+export type ProviderReloadSessionResult = typeof ProviderReloadSessionResult.Type;
+
+export class ProviderReloadSessionError extends Schema.TaggedError<ProviderReloadSessionError>()(
+  "ProviderReloadSessionError",
+  {
+    threadId: ThreadId,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {
+  override get message(): string {
+    return `Failed to reload the provider session for thread ${this.threadId}.`;
+  }
+}
+
 export const ProviderUploadFeedbackResult = Schema.Struct({
   feedbackId: TrimmedNonEmptyString,
 });

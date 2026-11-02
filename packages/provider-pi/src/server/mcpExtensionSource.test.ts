@@ -6,7 +6,7 @@ import * as NodeModule from "node:module";
 import * as NodeVM from "node:vm";
 import { assert, describe, it } from "@effect/vitest";
 
-import { PI_T3_MCP_EXTENSION_SOURCE } from "./mcpExtensionSource.ts";
+import { PI_T3_MCP_EXTENSION_SOURCE, PI_T3_RELOAD_COMMAND } from "./mcpExtensionSource.ts";
 import { loadMcpBridge } from "./mcpBridge.testkit.ts";
 
 type RequestHook = (
@@ -43,11 +43,26 @@ async function loadHooks(
     stripFrontmatter: (content: string) => content,
     pi: {
       on: (name: string, handler: unknown) => handlers.set(name, handler),
+      registerCommand: (name: string, options: { handler: unknown }) =>
+        handlers.set(`command:${name}`, options.handler),
       getCommands: () => commands,
     },
   });
   return handlers;
 }
+
+describe("Pi reload command", () => {
+  it("reloads the session through the extension command context", async () => {
+    const handlers = await loadHooks();
+    const handler = handlers.get(`command:${PI_T3_RELOAD_COMMAND}`) as
+      | ((args: string, ctx: { reload: () => Promise<void> }) => Promise<void>)
+      | undefined;
+    assert.isDefined(handler);
+    let reloads = 0;
+    await handler!("", { reload: async () => void reloads++ });
+    assert.equal(reloads, 1);
+  });
+});
 
 describe("Pi orchestration prompt section", () => {
   it.each([
@@ -367,6 +382,7 @@ describe("Pi tool discovery permissions", () => {
         on: (name: string, handler: ToolCallHook) => {
           if (name === "tool_call") toolCall = handler;
         },
+        registerCommand: () => undefined,
         getAllTools: () => [{ name: "tool_search", sourceInfo: { path: searchPath } }],
       },
     });
@@ -408,7 +424,10 @@ async function loadRequestHook(): Promise<RequestHook> {
   );
   await NodeVM.runInNewContext(`${source}\nt3McpExtension(pi)`, {
     process: { env: {} },
-    pi: { on: (name: string, handler: RequestHook) => handlers.set(name, handler) },
+    pi: {
+      on: (name: string, handler: RequestHook) => handlers.set(name, handler),
+      registerCommand: () => undefined,
+    },
   });
   const hook = handlers.get("before_provider_request");
   assert.isDefined(hook);

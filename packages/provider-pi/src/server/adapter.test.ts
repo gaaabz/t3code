@@ -24,6 +24,7 @@ import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
+import { PI_T3_RELOAD_COMMAND } from "./mcpExtensionSource.ts";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -176,6 +177,7 @@ interface FakePi {
       | { readonly steering: ReadonlyArray<string>; readonly followUp: ReadonlyArray<string> }
       | "unknown_command",
   ) => void;
+  readonly setExtensionCommands: (names: ReadonlyArray<string>) => void;
   readonly closeStdout: Effect.Effect<void>;
   readonly lastSpawn: () => {
     readonly args: ReadonlyArray<string>;
@@ -216,6 +218,7 @@ const makeFakePi: Effect.Effect<FakePi> = Effect.gen(function* () {
   let models: ReadonlyArray<unknown> = [];
   let isStreaming: boolean | null = null;
   let clearQueue: Parameters<FakePi["setClearQueue"]>[0] = { steering: [], followUp: [] };
+  let extensionCommands: ReadonlyArray<string> = [];
   let stdinBuffer = "";
 
   const emit = (record: PiRpcRecord, chunkBytes?: number) =>
@@ -281,6 +284,11 @@ const makeFakePi: Effect.Effect<FakePi> = Effect.gen(function* () {
         return { ...base, data: statsQueue.shift() ?? {} };
       case "fork":
         return { ...base, data: { text: "Hello pi", cancelled: false } };
+      case "get_commands":
+        return {
+          ...base,
+          data: { commands: extensionCommands.map((name) => ({ name, source: "extension" })) },
+        };
       case "clear_queue":
         return clearQueue === "unknown_command"
           ? { ...base, success: false, error: "Unknown command: clear_queue" }
@@ -400,6 +408,9 @@ const makeFakePi: Effect.Effect<FakePi> = Effect.gen(function* () {
     queueStats: (data) => statsQueue.push(data),
     setClearQueue: (result) => {
       clearQueue = result;
+    },
+    setExtensionCommands: (names) => {
+      extensionCommands = names;
     },
     closeStdout: Queue.end(stdout),
     lastSpawn: () => lastSpawn,
@@ -1585,6 +1596,34 @@ describe("PiAdapterV2", () => {
       assert.equal(spawn.env.T3_MCP_URL, "http://127.0.0.1:43123/mcp");
       assert.equal(spawn.env.T3_MCP_BEARER_TOKEN, "secret-pi-token");
       assert.equal(spawn.env.T3_PI_RUNTIME_MODE, "full-access");
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect.each([
+    { case: "runs the T3 extension's reload command", commands: [PI_T3_RELOAD_COMMAND] },
+    { case: "refuses without the T3 extension command", commands: [] },
+  ] as const)("reloadSession $case", ({ commands }) =>
+    Effect.gen(function* () {
+      const fake = yield* makeFakePi;
+      fake.setExtensionCommands(commands);
+      const { runtime } = yield* openRuntime(fake);
+      const providerThread = yield* runtime.ensureThread({
+        threadId: THREAD_ID,
+        modelSelection: modelSelection("default"),
+        runtimePolicy,
+      });
+      const exit = yield* Effect.exit(runtime.reloadSession!({ providerThread }));
+      const prompts = fake.allRequests().filter((request) => request["type"] === "prompt");
+      if (commands.length === 0) {
+        assert.isTrue(Exit.isFailure(exit));
+        assert.deepEqual(prompts, []);
+      } else {
+        assert.isTrue(Exit.isSuccess(exit));
+        assert.deepEqual(
+          prompts.map((request) => request["message"]),
+          [`/${PI_T3_RELOAD_COMMAND}`],
+        );
+      }
     }).pipe(Effect.scoped, Effect.provide(layerTest)),
   );
 
