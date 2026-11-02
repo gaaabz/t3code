@@ -33,6 +33,8 @@ import {
   type SidebarListMarker,
   type SidebarSection,
   resolveSidebarDropVerb,
+  formatWorktreeBaseRef,
+  groupFolderThreadsByWorktree,
   groupSidebarThreadsByProject,
   resolveSidebarFolderDot,
   sidebarFolderExpansionKeys,
@@ -1573,6 +1575,63 @@ describe("groupSidebarThreadsByProject", () => {
       { projectKey: "t3code", threads: ["a", "b"] },
       { projectKey: "fleet", threads: [] },
     ]);
+  });
+});
+
+describe("groupFolderThreadsByWorktree", () => {
+  it("keeps root threads first and groups worktree threads by checkout in recency order", () => {
+    const remoteEnvironmentId = EnvironmentId.make("environment-remote");
+    const thread = (
+      id: string,
+      worktreePath: string | null,
+      branch: string | null = null,
+      environmentId = localEnvironmentId,
+    ) => ({ id, environmentId, worktreePath, branch });
+    const threads = [
+      thread("wt-b-1", "/wt/feature-b", "feature/b"),
+      thread("root-1", null, "main"),
+      thread("wt-a-1", "/wt/feature-a", "feature/a"),
+      thread("wt-b-2", "/wt/feature-b/", "feature/b"),
+      thread("root-2", "  "),
+      thread("remote-b", "/wt/feature-b", "feature/b", remoteEnvironmentId),
+    ];
+
+    const grouped = groupFolderThreadsByWorktree(threads);
+
+    expect(grouped.rootThreads.map((entry) => entry.id)).toEqual(["root-1", "root-2"]);
+    expect(
+      grouped.worktrees.map((worktree) => ({
+        environmentId: worktree.environmentId,
+        worktreePath: worktree.worktreePath,
+        branch: worktree.branch,
+        threads: worktree.threads.map((entry) => entry.id),
+      })),
+    ).toEqual([
+      {
+        environmentId: localEnvironmentId,
+        worktreePath: "/wt/feature-b",
+        branch: "feature/b",
+        threads: ["wt-b-1", "wt-b-2"],
+      },
+      {
+        environmentId: localEnvironmentId,
+        worktreePath: "/wt/feature-a",
+        branch: "feature/a",
+        threads: ["wt-a-1"],
+      },
+      {
+        environmentId: remoteEnvironmentId,
+        worktreePath: "/wt/feature-b",
+        branch: "feature/b",
+        threads: ["remote-b"],
+      },
+    ]);
+  });
+
+  it("names a base ref by its branch", () => {
+    expect(formatWorktreeBaseRef("refs/heads/main")).toBe("main");
+    expect(formatWorktreeBaseRef("refs/remotes/origin/release/2")).toBe("origin/release/2");
+    expect(formatWorktreeBaseRef("origin/main")).toBe("origin/main");
   });
 });
 

@@ -180,6 +180,7 @@ import { isThreadInGrid, toggleThreadInGrid } from "./grid/threadGridActions";
 import {
   applySidebarThreadDrop,
   filterSidebarV2VisibleThreads,
+  groupFolderThreadsByWorktree,
   groupSidebarThreadsByProject,
   sidebarFolderExpansionKeys,
   buildBulkTitleRegenerationContextMenuItem,
@@ -268,6 +269,10 @@ import {
   SidebarProjectFolderHeader,
   sidebarFolderRowId,
 } from "./sidebar/SidebarProjectFolderHeader";
+import {
+  SidebarWorktreeGroupHeader,
+  sidebarWorktreeRowId,
+} from "./sidebar/SidebarWorktreeGroupHeader";
 import {
   SidebarDragBoundary,
   SidebarSectionHeader,
@@ -544,16 +549,44 @@ function useSidebarThreads(input: {
             projectExpandedById,
             sidebarFolderExpansionKeys(folder.group),
           );
+          if (collapsed) {
+            // A closed folder still shows the open thread, and hints at the rest.
+            const threads = routeThreadOnly(folder.threads, routeRowThreadKey);
+            return {
+              group: folder.group,
+              collapsed,
+              threads,
+              rootThreads: threads,
+              worktrees: [],
+              hiddenThreads: folder.threads.filter(
+                (thread) => threadShellKey(thread) !== routeRowThreadKey,
+              ),
+            };
+          }
+          const { rootThreads, worktrees } = groupFolderThreadsByWorktree(folder.threads);
+          const worktreeGroups = worktrees.map((worktree) => {
+            const worktreeCollapsed =
+              projectExpandedById[sidebarWorktreeRowId(worktree.key)] === false;
+            return {
+              worktree,
+              collapsed: worktreeCollapsed,
+              threads: worktreeCollapsed
+                ? routeThreadOnly(worktree.threads, routeRowThreadKey)
+                : worktree.threads,
+              hiddenCount: worktreeCollapsed
+                ? worktree.threads.filter((thread) => threadShellKey(thread) !== routeRowThreadKey)
+                    .length
+                : 0,
+            };
+          });
           return {
             group: folder.group,
             collapsed,
-            // A closed folder still shows the open thread, and hints at the rest.
-            threads: collapsed
-              ? routeThreadOnly(folder.threads, routeRowThreadKey)
-              : folder.threads,
-            hiddenThreads: collapsed
-              ? folder.threads.filter((thread) => threadShellKey(thread) !== routeRowThreadKey)
-              : EMPTY_THREADS,
+            // Render order, so keyboard and range selection walk the tree as drawn.
+            threads: [...rootThreads, ...worktreeGroups.flatMap((entry) => entry.threads)],
+            rootThreads,
+            worktrees: worktreeGroups,
+            hiddenThreads: EMPTY_THREADS,
           };
         });
   const orderedThreads = [
@@ -605,6 +638,10 @@ function useSidebarThreads(input: {
     toggleProjectFolder: (group: SidebarProjectSnapshot) => {
       const keys = sidebarFolderExpansionKeys(group);
       setProjectExpanded(keys, !resolveProjectExpanded(projectExpandedById, keys));
+    },
+    toggleWorktreeGroup: (worktreeKey: string) => {
+      const key = sidebarWorktreeRowId(worktreeKey);
+      setProjectExpanded(key, projectExpandedById[key] === false);
     },
     renderedSettledThreads,
     visibleSnoozedThreads,
@@ -1331,6 +1368,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     toggleWorkingShelf,
     projectFolders,
     toggleProjectFolder,
+    toggleWorktreeGroup,
     renderedSettledThreads,
     visibleSnoozedThreads,
     visibleWorkingThreads,
@@ -3310,8 +3348,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                       const renderThreadRow = (
                         thread: EnvironmentThreadShell,
                         section: SidebarSection,
-                        // The tree row of the project folder this row sits in.
+                        // The tree row of the project folder or worktree group this row sits in.
                         folderRow?: string,
+                        nested?: boolean,
                       ) => {
                         const threadKey = scopedThreadKey(
                           scopeThreadRef(thread.environmentId, thread.id),
@@ -3338,6 +3377,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                             }
                             thread={thread}
                             variant={rowVariant}
+                            nested={nested}
                             navigationParent={
                               folderRow ??
                               (section === "working" ||
@@ -3459,14 +3499,31 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                 onContextMenu={handleProjectFolderContextMenu}
                               />,
                             );
-                            for (const thread of folder.threads) {
+                            const folderRowId = sidebarFolderRowId(folder.group.projectKey);
+                            for (const thread of folder.rootThreads) {
+                              items.push(renderThreadRow(thread, "active", folderRowId));
+                            }
+                            for (const entry of folder.worktrees) {
                               items.push(
-                                renderThreadRow(
-                                  thread,
-                                  "active",
-                                  sidebarFolderRowId(folder.group.projectKey),
-                                ),
+                                <SidebarWorktreeGroupHeader
+                                  key={`worktree-group:${entry.worktree.key}`}
+                                  worktree={entry.worktree}
+                                  folderRowId={folderRowId}
+                                  collapsed={entry.collapsed}
+                                  hiddenCount={entry.hiddenCount}
+                                  onToggle={toggleWorktreeGroup}
+                                />,
                               );
+                              for (const thread of entry.threads) {
+                                items.push(
+                                  renderThreadRow(
+                                    thread,
+                                    "active",
+                                    sidebarWorktreeRowId(entry.worktree.key),
+                                    true,
+                                  ),
+                                );
+                              }
                             }
                           }
                           continue;

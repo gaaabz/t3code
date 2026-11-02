@@ -3,6 +3,7 @@ import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environ
 import { resolveThreadWorkingStartedAt } from "@t3tools/client-runtime/state/models";
 import { isShownUnderParent } from "@t3tools/client-runtime/state/threads";
 import { backgroundWorkHoldsCompletion } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
+import { normalizeProjectPathForComparison } from "@t3tools/shared/path";
 import { threadPullRequestSearchTerms } from "@t3tools/shared/threadPullRequests";
 import * as React from "react";
 import {
@@ -982,6 +983,49 @@ export function groupSidebarThreadsByProject<
     folderByProject.get(`${thread.environmentId}:${thread.projectId}`)?.threads.push(thread);
   }
   return folders.filter((folder) => folder.threads.length > 0 || keepEmpty(folder.group));
+}
+
+export interface SidebarWorktreeGroup<TThread> {
+  readonly key: string;
+  readonly environmentId: EnvironmentId;
+  readonly worktreePath: string;
+  readonly branch: string | null;
+  readonly threads: TThread[];
+}
+
+/** Splits a folder's threads into the base checkout's and one group per worktree, in thread order. */
+export function groupFolderThreadsByWorktree<
+  TThread extends Pick<SidebarThreadSummary, "environmentId" | "worktreePath" | "branch">,
+>(
+  threads: readonly TThread[],
+): { rootThreads: TThread[]; worktrees: SidebarWorktreeGroup<TThread>[] } {
+  const rootThreads: TThread[] = [];
+  const worktreeByKey = new Map<string, SidebarWorktreeGroup<TThread>>();
+  for (const thread of threads) {
+    const worktreePath = thread.worktreePath?.trim();
+    if (!worktreePath) {
+      rootThreads.push(thread);
+      continue;
+    }
+    const key = `${thread.environmentId}:${normalizeProjectPathForComparison(worktreePath)}`;
+    const worktree = worktreeByKey.get(key);
+    if (worktree) {
+      worktree.threads.push(thread);
+      continue;
+    }
+    worktreeByKey.set(key, {
+      key,
+      environmentId: thread.environmentId,
+      worktreePath,
+      branch: thread.branch,
+      threads: [thread],
+    });
+  }
+  return { rootThreads, worktrees: [...worktreeByKey.values()] };
+}
+
+export function formatWorktreeBaseRef(baseRef: string): string {
+  return baseRef.replace(/^refs\/(heads|remotes)\//, "");
 }
 
 export type SidebarV2TopStatusKind =
