@@ -115,7 +115,6 @@ export interface RightPanelTabsProps {
   defaultWidth?: number;
   inlineSize?: PreviewPanelInlineSize;
   layoutControls?: ReactNode;
-  titlebarAccessory?: ReactNode;
   surfaces: readonly RightPanelSurface[];
   environmentId: EnvironmentId | null;
   activeSurfaceId: string | null;
@@ -1509,11 +1508,6 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
               />
               <TooltipPopup>Scroll tabs right</TooltipPopup>
             </Tooltip>
-          </div>
-        ) : null}
-        {props.titlebarAccessory ? (
-          <div className="hidden h-full shrink-0 [-webkit-app-region:no-drag] md:flex">
-            {props.titlebarAccessory}
           </div>
         ) : null}
         {props.layoutControls}

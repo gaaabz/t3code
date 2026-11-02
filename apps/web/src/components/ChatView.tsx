@@ -3277,7 +3277,7 @@ export default function ChatView(props: ChatViewProps) {
     onToggleTerminal: toggleTerminalVisibilityStable,
     onToggleThreadPanel: toggleThreadPanelStable,
     onToggleRightPanel: toggleRightPanelStable,
-    // The fixed titlebar controls overlay the inline panel's tab bar, which only reserves icon space.
+    // With the inline panel open the fixed controls overlay its narrow tab bar, so the chat header shows usage.
     usageStrip: inlineRightPanelOwnsTitleBar ? null : usageStrip,
   } satisfies PanelLayoutControlsProps;
   const panelToggleControls = (
@@ -3331,7 +3331,7 @@ export default function ChatView(props: ChatViewProps) {
             ref={threadPanelPopoverAnchorRef}
             data-chat-header
             className={cn(
-              "relative bg-background [[data-panel-animations=true]_&]:motion-safe:transition-[padding-left] [[data-panel-animations=true]_&]:motion-safe:duration-(--panel-animation-duration) [[data-panel-animations=true]_&]:motion-safe:ease-out",
+              "@container/chat-header relative bg-background [[data-panel-animations=true]_&]:motion-safe:transition-[padding-left] [[data-panel-animations=true]_&]:motion-safe:duration-(--panel-animation-duration) [[data-panel-animations=true]_&]:motion-safe:ease-out",
               isElectron
                 ? cn(
                     "drag-region flex h-[var(--workspace-topbar-height)] min-h-[var(--workspace-topbar-height)] shrink-0 items-center px-3 sm:px-5",
@@ -3367,6 +3367,11 @@ export default function ChatView(props: ChatViewProps) {
                 : {})}
               {...(threadFindEnabled ? { onFindInThread: openThreadFindStable } : {})}
             />
+            {inlineRightPanelOwnsTitleBar && usageStrip ? (
+              <div className="-ml-8 mr-8 hidden h-full shrink-0 [-webkit-app-region:no-drag] @[520px]/chat-header:flex">
+                {usageStrip}
+              </div>
+            ) : null}
           </header>
         )}
 
@@ -3974,7 +3979,6 @@ export default function ChatView(props: ChatViewProps) {
           keybindings={keybindings}
           getShortcutContext={getShortcutContextStable}
           maximized={rightPanelMaximized}
-          titlebarAccessory={inlineRightPanelOwnsTitleBar ? usageStrip : null}
           layoutControls={
             rightPanelOpen ? (
               <div className="mr-px flex items-center gap-1">
