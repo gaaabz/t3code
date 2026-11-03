@@ -67,6 +67,7 @@ export function useComposerMenuItems({
   sideChatAvailable,
   sideChatDisabledReason,
   reloadSessionAvailable,
+  clearContextAvailable,
   compactSlashCommandAvailable,
   selectedProvider,
   selectedProviderSkills,
@@ -87,6 +88,7 @@ export function useComposerMenuItems({
   readonly sideChatAvailable: boolean;
   readonly sideChatDisabledReason: string | null;
   readonly reloadSessionAvailable: boolean;
+  readonly clearContextAvailable: boolean;
   readonly compactSlashCommandAvailable: boolean;
   readonly selectedProvider: ProviderDriverKind;
   readonly selectedProviderSkills: ServerProvider["skills"];
@@ -270,6 +272,17 @@ export function useComposerMenuItems({
                 command: "reload",
                 label: "/reload",
                 description: "Reload skills, plugins, and extensions for this thread's agent",
+              },
+            ] as const)
+          : []),
+        ...(clearContextAvailable
+          ? ([
+              {
+                id: "slash:clear",
+                type: "slash-command",
+                command: "clear",
+                label: "/clear",
+                description: "Start a fresh agent conversation, keeping this thread",
               },
             ] as const)
           : []),

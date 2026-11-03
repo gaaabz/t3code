@@ -384,6 +384,7 @@ export interface ChatComposerProps {
   onToggleKeepFullHistory: () => void;
   onUsageLimitsCommand?: (() => void) | undefined;
   onReloadSessionCommand?: (() => void) | undefined;
+  onClearContextCommand?: (() => void) | undefined;
   sideChatAvailable?: boolean;
   sideChatDisabledReason?: string | null;
   environmentUnavailable: {
@@ -1157,6 +1158,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     sideChatAvailable: props.sideChatAvailable === true,
     sideChatDisabledReason: props.sideChatDisabledReason ?? null,
     reloadSessionAvailable: props.onReloadSessionCommand !== undefined,
+    clearContextAvailable: props.onClearContextCommand !== undefined,
     compactSlashCommandAvailable,
     selectedProvider,
     selectedProviderSkills,
@@ -1849,7 +1851,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     };
   };
 
-  const { onUsageLimitsCommand, onReloadSessionCommand } = props;
+  const { onUsageLimitsCommand, onReloadSessionCommand, onClearContextCommand } = props;
   const onSelectComposerItem = (item: ComposerCommandItem) => {
     if (composerSelectLockRef.current) return;
     composerSelectLockRef.current = true;
@@ -1886,14 +1888,15 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         }
         return;
       }
-      if (item.command === "reload") {
-        if (!onReloadSessionCommand) return;
+      if (item.command === "reload" || item.command === "clear") {
+        const run = item.command === "reload" ? onReloadSessionCommand : onClearContextCommand;
+        if (!run) return;
         const applied = applyPromptReplacement(trigger.rangeStart, trigger.rangeEnd, "", {
           expectedText: snapshot.value.slice(trigger.rangeStart, trigger.rangeEnd),
         });
         if (applied) {
           setComposerHighlightedItemId(null);
-          onReloadSessionCommand();
+          run();
         }
         return;
       }

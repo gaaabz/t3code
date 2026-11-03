@@ -1344,6 +1344,122 @@ describe("orchestration v2 provider switching", () => {
       ),
   );
 
+  it.live("starts a fresh native conversation without a handoff after clearing context", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const cwd = yield* checkpointWorkspace("clear-provider-context");
+        const capturedTurns = yield* Ref.make<ReadonlyArray<CapturedTurn>>([]);
+        const generation = yield* Ref.make(0);
+        const layerRegistry = ProviderAdapterRegistry.layerFromAdapters([
+          makeTestAdapter({
+            instanceId: CLAUDE_MODEL_SELECTION.instanceId,
+            driver: CLAUDE_DRIVER,
+            capabilities: ClaudeProviderCapabilitiesV2,
+            modelSelection: CLAUDE_MODEL_SELECTION,
+            responseByRunOrdinal: {},
+            capturedTurns,
+            nativeThreadGeneration: generation,
+          }),
+        ]);
+        yield* Effect.gen(function* () {
+          const orchestrator = yield* Orchestrator.OrchestratorV2;
+          const worker = yield* EffectWorker.OrchestrationEffectWorkerV2;
+          const runToCompletion = Effect.fn("runToCompletion")(function* (ordinal: number) {
+            yield* orchestrator.dispatch({
+              type: "message.dispatch",
+              commandId: CommandId.make(`clear-context:${ordinal}`),
+              threadId,
+              messageId: MessageId.make(`clear-context:${ordinal}`),
+              createdBy: "user",
+              creationSource: "web",
+              text: `Request ${ordinal}`,
+              attachments: [],
+              modelSelection: CLAUDE_MODEL_SELECTION,
+              dispatchMode: { type: "start_immediately" },
+            });
+            yield* orchestrator.streamStoredEvents.pipe(
+              Stream.filter(
+                ({ event }) =>
+                  event.type === "run.updated" &&
+                  event.payload.ordinal === ordinal &&
+                  (event.payload.status === "completed" || event.payload.status === "failed"),
+              ),
+              Stream.runHead,
+            );
+            yield* worker.drain();
+          });
+          yield* orchestrator.dispatch({
+            type: "thread.create",
+            commandId: CommandId.make("clear-context:create"),
+            threadId,
+            projectId,
+            createdBy: "user",
+            creationSource: "web",
+            title: "Clear context",
+            modelSelection: CLAUDE_MODEL_SELECTION,
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            branch: null,
+            worktreePath: null,
+          });
+          yield* runToCompletion(1);
+          const before = yield* orchestrator.getThreadProjection(threadId);
+          const clearedProviderThreadId = before.thread.activeProviderThreadId;
+          yield* orchestrator.dispatch({
+            type: "thread.provider-context.clear",
+            commandId: CommandId.make("clear-context:clear"),
+            threadId,
+          });
+          yield* worker.drain();
+          const cleared = yield* orchestrator.getThreadProjection(threadId);
+          assert.isNull(cleared.thread.activeProviderThreadId);
+          assert.equal(cleared.thread.title, "Clear context");
+          assert.deepEqual(
+            cleared.providerSessions.map((session) => session.status),
+            [],
+          );
+          assert.equal(
+            cleared.providerThreads.find((thread) => thread.id === clearedProviderThreadId)?.status,
+            "closed",
+          );
+          yield* runToCompletion(2);
+          yield* runToCompletion(3);
+
+          const after = yield* orchestrator.getThreadProjection(threadId);
+          assert.deepEqual(
+            after.runs.map((run) => run.status),
+            ["completed", "completed", "completed"],
+          );
+          assert.notEqual(after.runs[1]?.providerThreadId, clearedProviderThreadId);
+          assert.equal(after.runs[2]?.providerThreadId, after.runs[1]?.providerThreadId);
+          assert.lengthOf(after.contextHandoffs, 0);
+          const turns = yield* Ref.get(capturedTurns);
+          assert.deepEqual(
+            turns.map((turn) => turn.text),
+            ["Request 1", "Request 2", "Request 3"],
+          );
+          assert.notEqual(turns[1]?.nativeThreadId, turns[0]?.nativeThreadId);
+          assert.isFalse(turns[1]?.nativeThreadHasTurns);
+          assert.equal(turns[2]?.nativeThreadId, turns[1]?.nativeThreadId);
+        }).pipe(
+          Effect.provide(
+            ProviderReplayHarness.layerWithRegistry(
+              {
+                name: "clear-provider-context",
+                runtimePolicyOverride: {
+                  cwd,
+                  approvalPolicy: "never",
+                  sandboxPolicy: { type: "readOnly" },
+                },
+              },
+              layerRegistry,
+            ),
+          ),
+        );
+      }),
+    ),
+  );
+
   it.live.each(["an older handoff", "a missed request"] as const)(
     "keeps the latest turn when a resume fallback also delivers %s",
     (older) =>

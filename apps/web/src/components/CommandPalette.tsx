@@ -68,6 +68,7 @@ import {
   MessageSquareIcon,
   PaletteIcon,
   RefreshCwIcon,
+  EraserIcon,
   RotateCcwIcon,
   SettingsIcon,
   MonitorIcon,
@@ -94,6 +95,7 @@ import { isDesktopLocalConnectionTarget } from "../connection/desktopLocal";
 import { useDesktopLocalBootstraps } from "../connection/useDesktopLocalBootstraps";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { useOpenPanelPullRequestUrl } from "../hooks/useOpenPanelPullRequestUrl";
+import { useClearThreadContext } from "../hooks/useClearThreadContext";
 import { useReloadThreadSession } from "../hooks/useReloadThreadSession";
 import { copyThreadReference } from "../lib/copyThreadReference";
 import {
@@ -458,6 +460,7 @@ function OpenCommandPaletteDialog(props: {
     reportFailure: false,
   });
   const reloadThreadSession = useReloadThreadSession();
+  const clearThreadContext = useClearThreadContext();
   const { environments } = useEnvironments();
   const desktopLocalBootstraps = useDesktopLocalBootstraps();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
@@ -1431,6 +1434,16 @@ function OpenCommandPaletteDialog(props: {
           instanceId: thread.runtime?.providerInstanceId ?? thread.modelSelection.instanceId,
           cwd: thread.worktreePath ?? project?.workspaceRoot ?? null,
         });
+      },
+    });
+    actionItems.push({
+      kind: "action",
+      value: "action:clear-agent-context",
+      searchTerms: ["clear", "context", "fresh", "conversation", "new", "agent", "session"],
+      title: "Clear agent context",
+      icon: <EraserIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        await clearThreadContext({ environmentId: thread.environmentId, threadId: thread.id });
       },
     });
     actionItems.push({

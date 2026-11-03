@@ -564,6 +564,7 @@ function commandThreadId(command: OrchestrationV2ServerCommand): ThreadId {
     case "thread.interaction-mode.set":
     case "thread.model-selection.set":
     case "provider-session.detach":
+    case "thread.provider-context.clear":
     case "message.dispatch":
     case "notification.delivery.accept":
     case "prepared-run.release":
@@ -984,7 +985,8 @@ function rootProviderThreadsForProvider(
       (providerThread) =>
         providerThread.providerInstanceId === providerInstanceId &&
         providerThread.appThreadId === projection.thread.id &&
-        providerThread.ownerNodeId === null,
+        providerThread.ownerNodeId === null &&
+        providerThread.status !== "closed",
     )
     .toSorted(
       (left, right) =>
@@ -4250,6 +4252,102 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       yield* Ref.update(effects, (existing) => [...existing, pendingEffect]);
     },
   );
+
+  const dispatchThreadProviderContextClear = Effect.fn(
+    "orchestrationV2.dispatch.threadProviderContextClear",
+  )(function* (
+    command: Extract<OrchestrationV2Command, { readonly type: "thread.provider-context.clear" }>,
+    events: Ref.Ref<Array<OrchestrationV2DomainEvent>>,
+    effects: Ref.Ref<Array<PendingOrchestrationEffectV2>>,
+  ) {
+    const reject = (cause: string) =>
+      new OrchestratorDispatchError({
+        commandId: command.commandId,
+        commandType: command.type,
+        cause: `Thread ${command.threadId} ${cause}`,
+      });
+    const projection = yield* projectionStore
+      .getThreadRecords(
+        command.threadId,
+        ["runs", "runtimeRequests", "providerThreads", "providerSessions"],
+        { turnItemTypes: [] },
+      )
+      .pipe(
+        Effect.mapError(
+          (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
+        ),
+      );
+    const thread = projection.thread;
+    if (thread.deletedAt !== null) return yield* reject("is deleted.");
+    if (isProviderNativeSubagentThread(thread)) {
+      return yield* reject("is a provider subagent and cannot be cleared.");
+    }
+    if (threadHasUnfinishedWork(projection)) {
+      return yield* reject("still has work in progress. Finish or stop it first.");
+    }
+    const activeProviderThread = projection.providerThreads.find(
+      (candidate) => candidate.id === thread.activeProviderThreadId,
+    );
+    if (activeProviderThread === undefined) return;
+    const now = yield* DateTime.now;
+    // Closing keeps provider-switch selection from resuming the cleared conversation.
+    yield* emit(
+      events,
+      command,
+    )({
+      type: "provider-thread.updated",
+      threadId: command.threadId,
+      driver: activeProviderThread.driver,
+      providerInstanceId: activeProviderThread.providerInstanceId,
+      occurredAt: now,
+      payload: { ...activeProviderThread, status: "closed", updatedAt: now },
+    });
+    // Emitted after the provider thread, whose reducer would otherwise make it active again.
+    yield* emit(
+      events,
+      command,
+    )({
+      type: "thread.metadata-updated",
+      threadId: command.threadId,
+      providerInstanceId: thread.providerInstanceId,
+      occurredAt: now,
+      payload: { ...thread, activeProviderThreadId: null, updatedAt: now },
+    });
+    const reason = "Provider context cleared.";
+    yield* Effect.forEach(
+      projection.providerSessions.filter(
+        (session) => session.status !== "stopped" && session.status !== "error",
+      ),
+      (session) =>
+        Effect.gen(function* () {
+          yield* emit(
+            events,
+            command,
+          )({
+            type: "provider-session.detached",
+            threadId: command.threadId,
+            driver: session.driver,
+            providerInstanceId: session.providerInstanceId,
+            occurredAt: now,
+            payload: { providerSessionId: session.id, detachedAt: now, reason },
+          });
+          yield* Ref.update(effects, (existing) => [
+            ...existing,
+            {
+              id: `effect:${command.commandId}:provider-session.detach:${session.id}`,
+              commandId: command.commandId,
+              threadId: command.threadId,
+              request: {
+                type: "provider-session.detach",
+                providerSessionId: session.id,
+                detail: reason,
+              },
+            } satisfies PendingOrchestrationEffectV2,
+          ]);
+        }),
+      { concurrency: 1, discard: true },
+    );
+  });
 
   const dispatchThreadProjectAdoptFolder = Effect.fn(
     "orchestrationV2.dispatch.threadProjectAdoptFolder",
@@ -13126,6 +13224,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         break;
       case "provider-session.detach":
         yield* dispatchProviderSessionDetach(command, events, effects);
+        break;
+      case "thread.provider-context.clear":
+        yield* dispatchThreadProviderContextClear(command, events, effects);
         break;
       case "thread.project.adopt-folder":
         yield* dispatchThreadProjectAdoptFolder(command, events);
