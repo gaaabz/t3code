@@ -12052,6 +12052,7 @@ describe("ClaudeAdapterV2 background wake turns", () => {
                 offer: () => Effect.void,
                 setModel: () => Effect.void,
                 applyFlagSettings: () => Effect.void,
+                reloadExtensions: Effect.void,
                 setPermissionMode: () => Effect.void,
                 backgroundTasks: () => Effect.succeed(false),
                 stopTask: () => Effect.void,
@@ -16227,7 +16228,12 @@ describe("ClaudeAdapterV2 background wake turns", () => {
         assert.equal(reloads, 1);
       }).pipe(
         Effect.provide(
-          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),
+          Layer.mergeAll(
+            IdAllocator.layer,
+            McpProviderSessions.layer,
+            NodeServices.layer,
+            NodeCrypto.layer,
+          ),
         ),
       ),
     ),
