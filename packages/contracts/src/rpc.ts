@@ -222,6 +222,14 @@ import {
   RelayClientStatusSchema,
 } from "./relayClient.ts";
 import {
+  VoiceTranscribeError,
+  VoiceTranscribeInput,
+  VoiceTranscribeResult,
+  VoiceTranscriptionInstallError,
+  VoiceTranscriptionInstallEvent,
+  VoiceTranscriptionStatus,
+} from "./voiceTranscription.ts";
+import {
   ORCHESTRATION_V2_WS_METHODS,
   OrchestrationGetWorkflowScriptError,
   OrchestrationV2GetNativeChildWorkError,
@@ -555,6 +563,10 @@ export const WS_METHODS = {
 
   cloudGetRelayClientStatus: "cloud.getRelayClientStatus",
   cloudInstallRelayClient: "cloud.installRelayClient",
+
+  voiceGetTranscriptionStatus: "voice.getTranscriptionStatus",
+  voiceInstallTranscriptionModel: "voice.installTranscriptionModel",
+  voiceTranscribe: "voice.transcribe",
 
   pullRequestsList: "pullRequests.list",
   pullRequestsListStats: "pullRequests.listStats",
@@ -991,6 +1003,25 @@ const WsCloudInstallRelayClientRpc = Rpc.make(WS_METHODS.cloudInstallRelayClient
   success: RelayClientInstallProgressEventSchema,
   error: Schema.Union([RelayClientInstallFailedError, EnvironmentAuthorizationError]),
   stream: true,
+});
+
+const WsVoiceGetTranscriptionStatusRpc = Rpc.make(WS_METHODS.voiceGetTranscriptionStatus, {
+  payload: Schema.Struct({}),
+  success: VoiceTranscriptionStatus,
+  error: EnvironmentAuthorizationError,
+});
+
+const WsVoiceInstallTranscriptionModelRpc = Rpc.make(WS_METHODS.voiceInstallTranscriptionModel, {
+  payload: Schema.Struct({}),
+  success: VoiceTranscriptionInstallEvent,
+  error: Schema.Union([VoiceTranscriptionInstallError, EnvironmentAuthorizationError]),
+  stream: true,
+});
+
+const WsVoiceTranscribeRpc = Rpc.make(WS_METHODS.voiceTranscribe, {
+  payload: VoiceTranscribeInput,
+  success: VoiceTranscribeResult,
+  error: Schema.Union([VoiceTranscribeError, EnvironmentAuthorizationError]),
 });
 
 const WsServerReportClientActivityRpc = Rpc.make(WS_METHODS.serverReportClientActivity, {
@@ -2066,6 +2097,9 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerReportClientActivityRpc,
   WsCloudGetRelayClientStatusRpc,
   WsCloudInstallRelayClientRpc,
+  WsVoiceGetTranscriptionStatusRpc,
+  WsVoiceInstallTranscriptionModelRpc,
+  WsVoiceTranscribeRpc,
   WsPullRequestsListRpc,
   WsPullRequestsListStatsRpc,
   WsPullRequestsFilterOptionsRpc,

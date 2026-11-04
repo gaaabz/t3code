@@ -597,7 +597,12 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     assert.deepStrictEqual(
       resolveMergedStageDependencies({
         platform: "linux",
-        serverDependencies: { "@ff-labs/fff-node": "0.9.4", "node-pty": "1.1.0", effect: "4.0.0" },
+        serverDependencies: {
+          "@ff-labs/fff-node": "0.9.4",
+          "node-pty": "1.1.0",
+          "sherpa-onnx-node": "2.0.1",
+          effect: "4.0.0",
+        },
         desktopDependencies: { "@crowecawcaw/xa11y": "0.13.0" },
         arch: "x64",
         fffNodeVersion: "0.9.4",
@@ -605,9 +610,28 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       {
         "@ff-labs/fff-node": "0.9.4",
         "node-pty": "1.1.0",
+        "sherpa-onnx-node": "2.0.1",
         "@crowecawcaw/xa11y": "0.13.0",
         "@ff-labs/fff-bin-linux-x64-gnu": "0.9.4",
         "@ff-labs/fff-bin-linux-x64-musl": "0.9.4",
+        "sherpa-onnx-linux-x64": "2.0.1",
+      },
+    );
+
+    assert.deepStrictEqual(
+      resolveMergedStageDependencies({
+        platform: "mac",
+        serverDependencies: { "sherpa-onnx-node": "2.0.1" },
+        desktopDependencies: {},
+        arch: "universal",
+        fffNodeVersion: "0.9.4",
+      }),
+      {
+        "sherpa-onnx-node": "2.0.1",
+        "@ff-labs/fff-bin-darwin-arm64": "0.9.4",
+        "@ff-labs/fff-bin-darwin-x64": "0.9.4",
+        "sherpa-onnx-darwin-arm64": "2.0.1",
+        "sherpa-onnx-darwin-x64": "2.0.1",
       },
     );
   });

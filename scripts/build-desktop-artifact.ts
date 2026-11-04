@@ -1418,6 +1418,21 @@ export function resolveFffNativeDependencies(
   );
 }
 
+/** sherpa-onnx-node picks its addon package at runtime, so stage the target's, not the build host's. */
+export function resolveSherpaOnnxNativeDependencies(
+  platform: typeof BuildPlatform.Type,
+  arch: typeof BuildArch.Type,
+  dependencies: Readonly<Record<string, string>>,
+): Record<string, string> {
+  const version = dependencies["sherpa-onnx-node"];
+  if (version === undefined) return {};
+  const architectures = arch === "universal" ? (["arm64", "x64"] as const) : [arch];
+  const os = platform === "mac" ? "darwin" : platform;
+  return Object.fromEntries(
+    architectures.map((architecture) => [`sherpa-onnx-${os}-${architecture}`, version]),
+  );
+}
+
 // macOS and Linux share one app.asar; stage the union of both bundles' external dependencies.
 export function resolveMergedStageDependencies(input: {
   readonly platform: "mac" | "linux";
@@ -1430,6 +1445,7 @@ export function resolveMergedStageDependencies(input: {
     ...selectCliRuntimeExternalDependencies(input.serverDependencies),
     ...input.desktopDependencies,
     ...resolveFffNativeDependencies(input.platform, input.arch, input.fffNodeVersion),
+    ...resolveSherpaOnnxNativeDependencies(input.platform, input.arch, input.serverDependencies),
   };
 }
 
@@ -3093,6 +3109,7 @@ export const stageWindowsServerSidecar = Effect.fn("stageWindowsServerSidecar")(
   const sidecarDependencies = {
     ...input.runtimeExternalDependencies,
     ...resolveFffNativeDependencies("win", input.arch, input.fffNodeVersion),
+    ...resolveSherpaOnnxNativeDependencies("win", input.arch, input.runtimeExternalDependencies),
   };
   const sidecarPatchedDependencies = createStagePatchedDependencies(
     input.patchedDependencies,
