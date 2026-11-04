@@ -23,10 +23,24 @@ export async function requestMicrophonePermission(): Promise<{
   }
 }
 
+const LEVEL_INTERVAL_MS = 100;
+
+/** Maps the RMS of a frame to 0..1 so quiet speech still visibly moves the meter. */
+function levelFromFrame(frame: Float32Array): number {
+  let sum = 0;
+  for (const sample of frame) sum += sample * sample;
+  return Math.min(1, Math.sqrt(Math.sqrt(sum / frame.length)) * 2);
+}
+
 export function createWebVoiceRecorder(
   onStatus: (status: VoiceRecorderStatus) => void,
+  onLevel: (level: number) => void,
 ): VoiceRecorder {
   let stream: MediaStream | null = null;
+  let meter: {
+    readonly context: AudioContext;
+    readonly timer: ReturnType<typeof setInterval>;
+  } | null = null;
   let recorder: MediaRecorder | null = null;
   let stopped: Promise<void> = Promise.resolve();
   let limitTimer: ReturnType<typeof setTimeout> | null = null;
@@ -35,6 +49,11 @@ export function createWebVoiceRecorder(
   const releaseMicrophone = () => {
     if (limitTimer !== null) clearTimeout(limitTimer);
     limitTimer = null;
+    if (meter) {
+      clearInterval(meter.timer);
+      void meter.context.close();
+      meter = null;
+    }
     for (const track of stream?.getTracks() ?? []) track.stop();
     stream = null;
   };
@@ -87,6 +106,18 @@ export function createWebVoiceRecorder(
     },
     record({ forDuration }) {
       recorder?.start();
+      if (stream) {
+        const context = new AudioContext();
+        const analyser = context.createAnalyser();
+        analyser.fftSize = 1024;
+        context.createMediaStreamSource(stream).connect(analyser);
+        const frame = new Float32Array(analyser.fftSize);
+        const timer = setInterval(() => {
+          analyser.getFloatTimeDomainData(frame);
+          onLevel(levelFromFrame(frame));
+        }, LEVEL_INTERVAL_MS);
+        meter = { context, timer };
+      }
       limitTimer = setTimeout(() => {
         void stop().then(() =>
           onStatus({ isFinished: true, hasError: false, error: null, url: uri }),

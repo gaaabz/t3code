@@ -10,8 +10,13 @@ import type { EnvironmentId, VoiceTranscriptionStatus } from "@t3tools/contracts
 import type { AtomCommandResult } from "@t3tools/client-runtime/state/runtime";
 import * as Cause from "effect/Cause";
 import { MicIcon, SquareIcon } from "lucide-react";
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 
+import {
+  readComposerDraftPrompt,
+  useComposerDraftStore,
+  type ComposerThreadTarget,
+} from "~/composerDraftStore";
 import { requestConfirmDialog } from "~/confirmDialog";
 import { isInSideChatPane } from "~/lib/sideChatPane";
 import { registerCommands } from "~/shortcuts/dispatcher";
@@ -51,9 +56,29 @@ function waitForPoll(signal: AbortSignal): Promise<void> {
 
 const megabytes = (bytes: number) => Math.round(bytes / 1_000_000);
 
+const METER_BARS = 4;
+const SILENT_LEVELS: ReadonlyArray<number> = Array.from({ length: METER_BARS }, () => 0);
+
+/** Recent microphone levels, oldest first, so the bars ripple as you speak. */
+function DictationLevelMeter(props: { readonly levels: ReadonlyArray<number> }) {
+  return (
+    <span aria-hidden="true" className="flex h-4 items-center gap-0.5">
+      {props.levels.map((level, index) => (
+        <span
+          // oxlint-disable-next-line react/no-array-index-key -- bars are fixed positions, not items
+          key={index}
+          className="h-4 w-0.5 rounded-full bg-current motion-safe:transition-transform motion-safe:duration-100"
+          style={{ transform: `scaleY(${0.2 + level * 0.8})` }}
+        />
+      ))}
+    </span>
+  );
+}
+
 export function ComposerVoiceButton(props: {
   readonly environmentId: EnvironmentId;
   readonly ownerKey: string;
+  readonly draftTarget: ComposerThreadTarget;
   readonly readDraft: () => {
     readonly text: string;
     readonly selection: { readonly start: number; readonly end: number };
@@ -84,6 +109,11 @@ function ComposerVoiceControl(props: Parameters<typeof ComposerVoiceButton>[0]) 
     errorAction: null,
   });
   const [installProgress, setInstallProgress] = useState<number | null>(null);
+  const [levels, setLevels] = useState(SILENT_LEVELS);
+  const [showStop, setShowStop] = useState(false);
+  const onLevel = useStableCallback((level: number) =>
+    setLevels((previous) => [...previous.slice(1), level]),
+  );
 
   const prepareTranscription = useStableCallback(async (signal: AbortSignal) => {
     const environmentId = props.environmentId;
@@ -147,16 +177,23 @@ function ComposerVoiceControl(props: Parameters<typeof ComposerVoiceButton>[0]) 
     );
   });
 
+  // A transcription outlives its composer (switching threads), then reads and writes the stored draft.
+  const mounted = useRef(true);
   const readDraft = useStableCallback(() => {
-    const draft = props.readDraft();
+    const draft = mounted.current
+      ? props.readDraft()
+      : { text: readComposerDraftPrompt(props.draftTarget), selection: { start: 0, end: 0 } };
     return draft === null ? null : { ownerKey: props.ownerKey, revision: 0, ...draft };
   });
   const commitDraft = useStableCallback(
-    (text: string, selection: { readonly start: number; readonly end: number }) =>
-      props.commitDraft(text, selection.start),
+    (text: string, selection: { readonly start: number; readonly end: number }) => {
+      if (mounted.current) props.commitDraft(text, selection.start);
+      else useComposerDraftStore.getState().setPrompt(props.draftTarget, text);
+    },
   );
   const onStateChange = useStableCallback((next: VoiceInputState) => {
     setState(next);
+    if (next.phase !== "recording") setLevels(SILENT_LEVELS);
     if (next.phase === "error" && next.error) {
       toastManager.add({ type: "error", title: next.error });
     }
@@ -173,7 +210,10 @@ function ComposerVoiceControl(props: Parameters<typeof ComposerVoiceButton>[0]) 
       },
     };
     let current: VoiceInputController | null = null;
-    const recorder = createWebVoiceRecorder((status) => void current?.handleRecorderStatus(status));
+    const recorder = createWebVoiceRecorder(
+      (status) => void current?.handleRecorderStatus(status),
+      onLevel,
+    );
     current = new VoiceInputController({
       recorder,
       getTranscriber: () => transcriber,
@@ -188,8 +228,14 @@ function ComposerVoiceControl(props: Parameters<typeof ComposerVoiceButton>[0]) 
     return current;
   });
 
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- releases the microphone when the composer unmounts.
-  useEffect(() => () => controller.dispose(), [controller]);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- releases the microphone when the composer unmounts; a transcription in flight finishes into the stored draft.
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      if (controller.currentState.phase !== "transcribing") controller.dispose();
+    };
+  }, [controller]);
 
   const busy = state.phase === "preparing" || state.phase === "transcribing";
   const recording = state.phase === "recording";
@@ -231,12 +277,26 @@ function ComposerVoiceControl(props: Parameters<typeof ComposerVoiceButton>[0]) 
             size="icon-sm"
             onPointerDown={(event) => event.preventDefault()}
             onClick={toggle}
+            onPointerEnter={() => setShowStop(true)}
+            onPointerLeave={() => setShowStop(false)}
+            onFocus={(event) => setShowStop(event.currentTarget.matches(":focus-visible"))}
+            onBlur={() => setShowStop(false)}
             aria-label={label}
             aria-pressed={recording}
           />
         }
       >
-        {busy ? <Spinner /> : recording ? <SquareIcon /> : <MicIcon />}
+        {busy ? (
+          <Spinner />
+        ) : recording ? (
+          showStop ? (
+            <SquareIcon />
+          ) : (
+            <DictationLevelMeter levels={levels} />
+          )
+        ) : (
+          <MicIcon />
+        )}
       </TooltipTrigger>
       <TooltipPopup>
         <span className="flex items-center gap-2">

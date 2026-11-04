@@ -3515,6 +3515,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   <ComposerVoiceButton
                     environmentId={environmentId}
                     ownerKey={composerDraftTargetKey}
+                    draftTarget={composerDraftTarget}
                     readDraft={readVoiceDraft}
                     commitDraft={commitVoiceDraft}
                     shortcutLabel={shortcutLabelForCommand(

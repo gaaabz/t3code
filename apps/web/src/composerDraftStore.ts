@@ -4400,6 +4400,10 @@ export function clearComposerDraftsEnvironment(environmentId: EnvironmentId): vo
   composerDebouncedStorage.flush();
 }
 
+export function readComposerDraftPrompt(threadRef: ComposerThreadTarget): string {
+  return getComposerDraftState(useComposerDraftStore.getState(), threadRef)?.prompt ?? "";
+}
+
 export function useComposerThreadDraft(threadRef: ComposerThreadTarget): ComposerThreadDraftState {
   return useComposerDraftStore((state) => {
     return getComposerDraftState(state, threadRef) ?? EMPTY_THREAD_DRAFT;
