@@ -3517,6 +3517,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     ownerKey={composerDraftTargetKey}
                     readDraft={readVoiceDraft}
                     commitDraft={commitVoiceDraft}
+                    shortcutLabel={shortcutLabelForCommand(
+                      keybindings,
+                      "composer.toggleDictation",
+                      {
+                        context: { terminalFocus: false },
+                      },
+                    )}
                   />
                 </div>
                 <div

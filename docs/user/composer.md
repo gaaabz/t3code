@@ -213,8 +213,9 @@ transcription or cancellation; only the message text is sent when you submit.
 
 ## Voice input on web and desktop
 
-Select the microphone in the composer to start recording, then select it again to
-transcribe. Text is inserted where your cursor was when recording started.
+Select the microphone in the composer, or press **Ctrl+Shift+Space** (**Cmd+Shift+Space**
+on macOS), to start recording; do it again to transcribe. Change the shortcut in
+**Settings → Keybindings**. Text is inserted where your cursor was when recording started.
 Select the spinner to cancel while T3 Code prepares or transcribes.
 
 Transcription runs on the T3 server the thread belongs to, using NVIDIA's Parakeet

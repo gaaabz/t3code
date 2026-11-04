@@ -10,9 +10,11 @@ import type { EnvironmentId, VoiceTranscriptionStatus } from "@t3tools/contracts
 import type { AtomCommandResult } from "@t3tools/client-runtime/state/runtime";
 import * as Cause from "effect/Cause";
 import { MicIcon, SquareIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 
 import { requestConfirmDialog } from "~/confirmDialog";
+import { isInSideChatPane } from "~/lib/sideChatPane";
+import { registerCommands } from "~/shortcuts/dispatcher";
 import { useStableCallback } from "~/hooks/useStableCallback";
 import { serverEnvironment } from "~/state/server";
 import { useServerConfigs } from "~/state/entities";
@@ -20,9 +22,11 @@ import { useAtomCommand } from "~/state/use-atom-command";
 import { encodeRecordingAsPcm16 } from "~/voice/encodePcm16";
 import { createWebVoiceRecorder, requestMicrophonePermission } from "~/voice/webVoiceRecorder";
 import { Button } from "../ui/button";
+import { Kbd } from "../ui/kbd";
 import { Spinner } from "../ui/spinner";
 import { toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { BackgroundThreadContext } from "./backgroundThread";
 
 const INSTALL_POLL_MS = 1000;
 
@@ -55,6 +59,7 @@ export function ComposerVoiceButton(props: {
     readonly selection: { readonly start: number; readonly end: number };
   } | null;
   readonly commitDraft: (text: string, cursor: number) => void;
+  readonly shortcutLabel: string | null;
 }) {
   const supported =
     useServerConfigs().get(props.environmentId)?.environment.capabilities.voiceTranscription ===
@@ -188,6 +193,24 @@ function ComposerVoiceControl(props: Parameters<typeof ComposerVoiceButton>[0]) 
 
   const busy = state.phase === "preparing" || state.phase === "transcribing";
   const recording = state.phase === "recording";
+  const toggle = useStableCallback(() => {
+    if (recording) void controller.stop();
+    else if (busy) controller.cancel();
+    else void controller.start();
+  });
+  const handleShortcut = useStableCallback((event: KeyboardEvent) => {
+    event.preventDefault();
+    toggle();
+  });
+  const backgroundThread = use(BackgroundThreadContext);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- registers the dictation shortcut with the command registry while this composer is mounted
+  useEffect(() => {
+    if (backgroundThread) return;
+    return registerCommands(
+      { "composer.toggleDictation": handleShortcut },
+      { when: (event) => !isInSideChatPane(event.target) },
+    );
+  }, [backgroundThread, handleShortcut]);
   const label = recording
     ? "Stop and transcribe"
     : state.phase === "transcribing"
@@ -207,11 +230,7 @@ function ComposerVoiceControl(props: Parameters<typeof ComposerVoiceButton>[0]) 
             variant={recording ? "ghost-destructive" : "ghost"}
             size="icon-sm"
             onPointerDown={(event) => event.preventDefault()}
-            onClick={() => {
-              if (recording) void controller.stop();
-              else if (busy) controller.cancel();
-              else void controller.start();
-            }}
+            onClick={toggle}
             aria-label={label}
             aria-pressed={recording}
           />
@@ -219,7 +238,12 @@ function ComposerVoiceControl(props: Parameters<typeof ComposerVoiceButton>[0]) 
       >
         {busy ? <Spinner /> : recording ? <SquareIcon /> : <MicIcon />}
       </TooltipTrigger>
-      <TooltipPopup>{label}</TooltipPopup>
+      <TooltipPopup>
+        <span className="flex items-center gap-2">
+          {label}
+          {props.shortcutLabel ? <Kbd>{props.shortcutLabel}</Kbd> : null}
+        </span>
+      </TooltipPopup>
     </Tooltip>
   );
 }
