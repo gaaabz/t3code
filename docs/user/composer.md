@@ -211,6 +211,25 @@ a saved preference, but simultaneous same-name inputs remain separately selectab
 Transcription runs on your device. T3 Code deletes the temporary audio after
 transcription or cancellation; only the message text is sent when you submit.
 
+## Voice input on web and desktop
+
+Select the microphone in the composer to start recording, then select it again to
+transcribe. Text is inserted where your cursor was when recording started.
+Select the spinner to cancel while T3 Code prepares or transcribes.
+
+Transcription runs on the T3 server the thread belongs to, using NVIDIA's Parakeet
+model, so it works the same from the desktop app, a browser, or a remote
+connection. The first time, T3 Code asks before downloading the model (about
+670 MB) to that server; later dictation works without an internet connection.
+The recording is sent to that server only to be transcribed and is not stored.
+Recordings can be up to five minutes long. Parakeet recognizes English and about
+two dozen other European languages, including Spanish, and detects the language
+automatically.
+
+The microphone is hidden when the server is too old to support voice input or your
+connection to it cannot start agent turns. If the server's platform cannot run the
+model, the first attempt says so.
+
 ## Queued messages
 
 On web and desktop, the composer shows **Interrupt** while the agent is working and the draft is
