@@ -235,6 +235,7 @@ export interface ThreadDetailScreenProps {
   readonly onDismissFeedback: (id: MessageId) => void;
   readonly selectedThreadFeed: ReadonlyArray<ThreadFeedEntry>;
   readonly pendingHandoff?: HandoffEndpoints | null;
+  readonly contextClearedPending?: boolean;
   readonly activityRun: ThreadFeedLatestRun | null;
   readonly activeWorkStartedAt: string | null;
   readonly runlessWorkActive?: boolean;
@@ -1446,6 +1447,7 @@ function ThreadDetailBody(
                 workspaceRoot={props.threadCwd}
                 feed={props.selectedThreadFeed}
                 pendingHandoff={props.pendingHandoff}
+                contextClearedPending={props.contextClearedPending}
                 worktreeSetup={props.worktreeSetup}
                 setupWorkingStartedAt={props.setupWorkingStartedAt}
                 queuedMessages={props.queuedMessages}

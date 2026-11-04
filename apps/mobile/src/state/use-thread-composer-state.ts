@@ -1,6 +1,6 @@
 import { useComposerAttachmentActions } from "./use-composer-attachment-actions";
 import * as Dialog from "../components/ui/Dialog";
-import { AuthOrchestrationOperateScope } from "@t3tools/contracts";
+import { AuthOrchestrationOperateScope, isProviderContextCleared } from "@t3tools/contracts";
 import { readEnvironmentScope } from "./session";
 import { useAtomValue } from "@effect/atom-react";
 import { threadRuntimeIsActive } from "@t3tools/client-runtime/state/shell";
@@ -300,6 +300,9 @@ export function useThreadComposerState() {
       : modelSelection,
     serverConfig?.providers ?? [],
   );
+  const contextClearedPending =
+    selectedThreadProjection != null &&
+    isProviderContextCleared(selectedThreadProjection.projection);
   const runtimeMode = selectedDraft.runtimeMode ?? selectedThread?.runtimeMode ?? null;
   const selectedProvider = selectedEnvironmentRuntime?.serverConfig?.providers.find(
     (provider) => provider.instanceId === modelSelection?.instanceId,
@@ -762,6 +765,7 @@ export function useThreadComposerState() {
     onRemoveQueuedEditAttachment,
     modelSelection,
     pendingHandoff,
+    contextClearedPending,
     canSwitchThreadProvider,
     runtimeMode,
     interactionMode,

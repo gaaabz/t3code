@@ -1492,6 +1492,26 @@ export const OrchestrationV2ModelSwitch = Schema.Struct({
 });
 export type OrchestrationV2ModelSwitch = typeof OrchestrationV2ModelSwitch.Type;
 
+/** The thread's context was cleared and its next turn has not started a new conversation yet. */
+export function isProviderContextCleared(projection: {
+  readonly thread: Pick<OrchestrationV2AppThread, "activeProviderThreadId">;
+  readonly runs: ReadonlyArray<Pick<OrchestrationV2Run, "status" | "providerThreadId">>;
+  readonly providerThreads: ReadonlyArray<Pick<OrchestrationV2ProviderThread, "id" | "status">>;
+}): boolean {
+  if (projection.thread.activeProviderThreadId !== null) return false;
+  const latest = projection.runs.findLast(
+    (run) =>
+      run.status !== "rolled_back" && run.status !== "queued" && run.providerThreadId !== null,
+  );
+  return (
+    latest !== undefined &&
+    projection.providerThreads.some(
+      (providerThread) =>
+        providerThread.id === latest.providerThreadId && providerThread.status === "closed",
+    )
+  );
+}
+
 const OrchestrationV2TurnItemBaseFields = {
   /** Wire-only cursor for collapsed work; persisted items keep their complete history. */
   deferredWork: Schema.optionalKey(
@@ -1614,6 +1634,8 @@ export const OrchestrationV2TurnItem = Schema.Union([
     context: Schema.optional(OrchestrationMessageContext),
     attachments: Schema.Array(ChatAttachment),
     modelSwitch: Schema.optional(OrchestrationV2ModelSwitch),
+    /** This message started a fresh provider conversation after the context was cleared. */
+    contextCleared: Schema.optional(Schema.Literal(true)),
   }),
   Schema.Struct({
     ...OrchestrationV2TurnItemBaseFields,
@@ -2448,6 +2470,8 @@ export const OrchestrationV2TurnItemJson = Schema.Union([
     context: Schema.optional(OrchestrationMessageContext),
     attachments: Schema.Array(ChatAttachment),
     modelSwitch: Schema.optional(OrchestrationV2ModelSwitch),
+    /** This message started a fresh provider conversation after the context was cleared. */
+    contextCleared: Schema.optional(Schema.Literal(true)),
   }),
   Schema.Struct({
     ...OrchestrationV2TurnItemJsonBaseFields,

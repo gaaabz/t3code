@@ -56,6 +56,7 @@ import IconPlusMinus from "@tabler/icons-react-native/IconPlusMinus";
 import IconDotsVertical from "@tabler/icons-react-native/IconDotsVertical";
 import IconDotsCircleHorizontal from "@tabler/icons-react-native/IconDotsCircleHorizontal";
 import IconEdit from "@tabler/icons-react-native/IconEdit";
+import IconEraser from "@tabler/icons-react-native/IconEraser";
 import IconExternalLink from "@tabler/icons-react-native/IconExternalLink";
 import IconEyeOff from "@tabler/icons-react-native/IconEyeOff";
 import IconEye from "@tabler/icons-react-native/IconEye";
@@ -200,6 +201,7 @@ const ANDROID_ICON_BY_SF_SYMBOL = {
   "doc.text": IconFileText,
   "file.diff": IconFileDiff,
   ellipsis: IconDots,
+  eraser: IconEraser,
   moon: IconMoon,
   "ellipsis.circle": IconDotsCircleHorizontal,
   "exclamationmark.triangle": IconAlertTriangle,

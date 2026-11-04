@@ -41,6 +41,7 @@ import {
   BotIcon,
   ChevronRightIcon,
   CircleStopIcon,
+  EraserIcon,
   ArrowRightLeftIcon,
   ArrowRightIcon,
   GitForkIcon,
@@ -595,6 +596,10 @@ function EnvironmentHandoffRow({
   const providers =
     useAtomValue(serverEnvironment.providersValueAtom(environmentId)) ?? EMPTY_SERVER_PROVIDERS;
   return <HandoffRow {...props} environmentId={environmentId} providers={providers} />;
+}
+
+export function ContextClearedRow() {
+  return <TimelineSystemDivider label="Context cleared" icon={EraserIcon} />;
 }
 
 /** A same-harness model or effort change. Shows only what changed. */
