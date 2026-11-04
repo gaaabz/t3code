@@ -4,12 +4,13 @@ import {
   VOICE_TRANSCRIPTION_SAMPLE_RATE,
   VoiceTranscribeError,
   VoiceTranscriptionInstallError,
-  type VoiceTranscriptionInstallEvent,
   type VoiceTranscriptionStatus,
 } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
+import type * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
@@ -19,7 +20,6 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
-import * as SubscriptionRef from "effect/SubscriptionRef";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 import * as NodeCrypto from "node:crypto";
 import * as NodeOS from "node:os";
@@ -135,7 +135,11 @@ const loadSherpaEngine: Effect.Effect<SpeechEngineLoad> = Effect.tryPromise(
 
 type InstallState =
   | { readonly _tag: "idle" }
-  | { readonly _tag: "installing"; readonly downloadedBytes: number }
+  | {
+      readonly _tag: "installing";
+      readonly progress: { readonly downloadedBytes: number };
+      readonly done: Deferred.Deferred<void, VoiceTranscriptionInstallError>;
+    }
   | { readonly _tag: "installed" }
   | { readonly _tag: "failed"; readonly message: string };
 
@@ -143,8 +147,8 @@ export class VoiceTranscription extends Context.Service<
   VoiceTranscription,
   {
     readonly status: Effect.Effect<VoiceTranscriptionStatus>;
-    /** Starts the model download if needed and follows it until it finishes. */
-    readonly install: Stream.Stream<VoiceTranscriptionInstallEvent, VoiceTranscriptionInstallError>;
+    /** Starts the model download in the background if needed; poll status for progress. */
+    readonly install: Effect.Effect<VoiceTranscriptionStatus, VoiceTranscriptionInstallError>;
     /** `audio` is little-endian 16-bit mono PCM at VOICE_TRANSCRIPTION_SAMPLE_RATE. */
     readonly transcribe: (audio: Uint8Array) => Effect.Effect<string, VoiceTranscribeError>;
   }
@@ -154,6 +158,8 @@ export interface VoiceTranscriptionOptions {
   readonly baseDir: string;
   readonly model?: SpeechModel;
   readonly loadEngine?: Effect.Effect<SpeechEngineLoad>;
+  /** How long install waits for the download before returning its progress. */
+  readonly wait?: Duration.Input;
 }
 
 const DOWNLOAD_TIMEOUT = "60 minutes";
@@ -186,7 +192,7 @@ export const makeVoiceTranscription = Effect.fn("VoiceTranscription.make")(funct
     Object.entries(model.files).map(([key, file]) => [key, path.join(modelDir, file.name)]),
   ) as SpeechModelPaths;
   const engineLoad = yield* Effect.cached(options.loadEngine ?? loadSherpaEngine);
-  const state = yield* SubscriptionRef.make<InstallState>({ _tag: "idle" });
+  let state: InstallState = { _tag: "idle" };
   const installGate = yield* Semaphore.make(1);
   const recognizerGate = yield* Semaphore.make(1);
   let recognizer: SpeechRecognizer | null = null;
@@ -199,9 +205,9 @@ export const makeVoiceTranscription = Effect.fn("VoiceTranscription.make")(funct
   ).pipe(Effect.map((results) => results.every(Boolean)));
 
   const installed = Effect.gen(function* () {
-    if ((yield* SubscriptionRef.get(state))._tag === "installed") return true;
+    if (state._tag === "installed") return true;
     if (!(yield* isInstalled)) return false;
-    yield* SubscriptionRef.set(state, { _tag: "installed" });
+    state = { _tag: "installed" };
     return true;
   });
 
@@ -213,7 +219,7 @@ export const makeVoiceTranscription = Effect.fn("VoiceTranscription.make")(funct
   const downloadFile = Effect.fn("VoiceTranscription.downloadFile")(function* (
     file: SpeechModelFile,
     destination: string,
-    progress: { downloadedBytes: number; reportedBytes: number },
+    progress: { downloadedBytes: number },
   ) {
     const response = yield* http
       .execute(HttpClientRequest.get(`${model.baseUrl}/${file.name}`))
@@ -233,15 +239,7 @@ export const makeVoiceTranscription = Effect.fn("VoiceTranscription.make")(funct
           }
           hash.update(chunk);
           progress.downloadedBytes += chunk.byteLength;
-          // About a hundred progress events per install, not one per chunk.
-          if (progress.downloadedBytes - progress.reportedBytes < totalBytes / 100) {
-            return Effect.void;
-          }
-          progress.reportedBytes = progress.downloadedBytes;
-          return SubscriptionRef.set(state, {
-            _tag: "installing",
-            downloadedBytes: progress.downloadedBytes,
-          });
+          return Effect.void;
         }),
       ),
       Stream.run(fs.sink(destination, { flag: "wx", mode: 0o600 })),
@@ -253,20 +251,20 @@ export const makeVoiceTranscription = Effect.fn("VoiceTranscription.make")(funct
     }
   });
 
-  const download = Effect.gen(function* () {
-    yield* fs.makeDirectory(modelsRoot, { recursive: true });
-    // Staging shares the models root's filesystem so publishing is one rename.
-    const staging = yield* fs.makeTempDirectoryScoped({
-      directory: modelsRoot,
-      prefix: ".install-",
-    });
-    const progress = { downloadedBytes: 0, reportedBytes: 0 };
-    for (const file of files) {
-      yield* downloadFile(file, path.join(staging, file.name), progress);
-    }
-    yield* fs.remove(modelDir, { recursive: true, force: true });
-    yield* fs.rename(staging, modelDir);
-  }).pipe(
+  const download = Effect.fn("VoiceTranscription.download")(
+    function* (progress: { downloadedBytes: number }) {
+      yield* fs.makeDirectory(modelsRoot, { recursive: true });
+      // Staging shares the models root's filesystem so publishing is one rename.
+      const staging = yield* fs.makeTempDirectoryScoped({
+        directory: modelsRoot,
+        prefix: ".install-",
+      });
+      for (const file of files) {
+        yield* downloadFile(file, path.join(staging, file.name), progress);
+      }
+      yield* fs.remove(modelDir, { recursive: true, force: true });
+      yield* fs.rename(staging, modelDir);
+    },
     Effect.scoped,
     Effect.timeout(DOWNLOAD_TIMEOUT),
     Effect.mapError(
@@ -282,14 +280,15 @@ export const makeVoiceTranscription = Effect.fn("VoiceTranscription.make")(funct
       if (load._tag === "unsupported") {
         return yield* new VoiceTranscriptionInstallError({ message: load.reason });
       }
-      const current = yield* SubscriptionRef.get(state);
-      if (current._tag === "installing" || (yield* installed)) return;
-      yield* SubscriptionRef.set(state, { _tag: "installing", downloadedBytes: 0 });
-      yield* download.pipe(
+      if (state._tag === "installing") return state.done;
+      if (yield* installed) return null;
+      const progress = { downloadedBytes: 0 };
+      const done = yield* Deferred.make<void, VoiceTranscriptionInstallError>();
+      state = { _tag: "installing", progress, done };
+      yield* download(progress).pipe(
         Effect.onExit((exit) =>
-          SubscriptionRef.set(
-            state,
-            Exit.isSuccess(exit)
+          Effect.sync(() => {
+            state = Exit.isSuccess(exit)
               ? { _tag: "installed" }
               : {
                   _tag: "failed",
@@ -297,13 +296,14 @@ export const makeVoiceTranscription = Effect.fn("VoiceTranscription.make")(funct
                     onNone: () => "The voice model download stopped.",
                     onSome: (error) => error.message,
                   }),
-                },
-          ),
+                };
+          }).pipe(Effect.andThen(Deferred.done(done, Exit.asVoid(exit)))),
         ),
         Effect.ignoreCause,
         Effect.interruptible,
         Effect.forkIn(serviceScope),
       );
+      return done;
     }),
   );
 
@@ -312,42 +312,29 @@ export const makeVoiceTranscription = Effect.fn("VoiceTranscription.make")(funct
     if (load._tag === "unsupported") {
       return { status: "unsupported", reason: load.reason } as const;
     }
-    const current = yield* SubscriptionRef.get(state);
+    const current = state;
     if (current._tag === "installing") {
       return {
         status: "installing",
-        downloadedBytes: current.downloadedBytes,
+        downloadedBytes: current.progress.downloadedBytes,
         totalBytes,
       } as const;
     }
-    return (yield* installed)
-      ? ({ status: "ready" } as const)
+    if (yield* installed) return { status: "ready" } as const;
+    return current._tag === "failed"
+      ? ({ status: "missing", downloadBytes: totalBytes, lastError: current.message } as const)
       : ({ status: "missing", downloadBytes: totalBytes } as const);
   }).pipe(Effect.withSpan("VoiceTranscription.status"));
 
-  const install = Stream.unwrap(startInstall.pipe(Effect.as(SubscriptionRef.changes(state)))).pipe(
-    Stream.takeUntil((current) => current._tag !== "installing"),
-    Stream.mapEffect(
-      (current): Effect.Effect<VoiceTranscriptionInstallEvent, VoiceTranscriptionInstallError> => {
-        switch (current._tag) {
-          case "installing":
-            return Effect.succeed({
-              type: "progress",
-              downloadedBytes: current.downloadedBytes,
-              totalBytes,
-            });
-          case "installed":
-            return Effect.succeed({ type: "complete" });
-          case "failed":
-            return Effect.fail(new VoiceTranscriptionInstallError({ message: current.message }));
-          case "idle":
-            return Effect.fail(
-              new VoiceTranscriptionInstallError({ message: "The voice model install stopped." }),
-            );
-        }
-      },
-    ),
-  );
+  const install = Effect.gen(function* () {
+    const done = yield* startInstall;
+    if (done !== null) {
+      yield* Deferred.await(done).pipe(
+        Effect.timeoutOrElse({ duration: options.wait ?? "2 seconds", orElse: () => Effect.void }),
+      );
+    }
+    return yield* status;
+  }).pipe(Effect.withSpan("VoiceTranscription.install"));
 
   const transcribe = Effect.fn("VoiceTranscription.transcribe")(
     function* (audio: Uint8Array) {

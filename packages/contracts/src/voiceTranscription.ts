@@ -8,7 +8,12 @@ export const VOICE_TRANSCRIPTION_MAX_AUDIO_BYTES =
 
 export const VoiceTranscriptionStatus = Schema.Union([
   Schema.Struct({ status: Schema.Literal("ready") }),
-  Schema.Struct({ status: Schema.Literal("missing"), downloadBytes: Schema.Number }),
+  Schema.Struct({
+    status: Schema.Literal("missing"),
+    downloadBytes: Schema.Number,
+    /** Why the previous download attempt failed, until the next attempt starts. */
+    lastError: Schema.optionalKey(Schema.String),
+  }),
   Schema.Struct({
     status: Schema.Literal("installing"),
     downloadedBytes: Schema.Number,
@@ -17,16 +22,6 @@ export const VoiceTranscriptionStatus = Schema.Union([
   Schema.Struct({ status: Schema.Literal("unsupported"), reason: Schema.String }),
 ]);
 export type VoiceTranscriptionStatus = typeof VoiceTranscriptionStatus.Type;
-
-export const VoiceTranscriptionInstallEvent = Schema.Union([
-  Schema.Struct({
-    type: Schema.Literal("progress"),
-    downloadedBytes: Schema.Number,
-    totalBytes: Schema.Number,
-  }),
-  Schema.Struct({ type: Schema.Literal("complete") }),
-]);
-export type VoiceTranscriptionInstallEvent = typeof VoiceTranscriptionInstallEvent.Type;
 
 export class VoiceTranscriptionInstallError extends Schema.TaggedError<VoiceTranscriptionInstallError>()(
   "VoiceTranscriptionInstallError",

@@ -226,7 +226,6 @@ import {
   VoiceTranscribeInput,
   VoiceTranscribeResult,
   VoiceTranscriptionInstallError,
-  VoiceTranscriptionInstallEvent,
   VoiceTranscriptionStatus,
 } from "./voiceTranscription.ts";
 import {
@@ -1013,9 +1012,8 @@ const WsVoiceGetTranscriptionStatusRpc = Rpc.make(WS_METHODS.voiceGetTranscripti
 
 const WsVoiceInstallTranscriptionModelRpc = Rpc.make(WS_METHODS.voiceInstallTranscriptionModel, {
   payload: Schema.Struct({}),
-  success: VoiceTranscriptionInstallEvent,
+  success: VoiceTranscriptionStatus,
   error: Schema.Union([VoiceTranscriptionInstallError, EnvironmentAuthorizationError]),
-  stream: true,
 });
 
 const WsVoiceTranscribeRpc = Rpc.make(WS_METHODS.voiceTranscribe, {

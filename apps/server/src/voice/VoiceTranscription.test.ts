@@ -98,9 +98,8 @@ it.layer(NodeServices.layer)("VoiceTranscription", (it) => {
       const { service, fs, path, modelDir, requests, decoded, loads } = yield* makeHarness();
       expect(yield* service.status).toEqual({ status: "missing", downloadBytes: 32 });
 
-      const events = yield* service.install.pipe(Stream.runCollect);
+      expect(yield* service.install).toEqual({ status: "ready" });
 
-      expect(Array.from(events).at(-1)).toEqual({ type: "complete" });
       expect(requests).toEqual(
         ["encoder", "decoder", "joiner", "tokens"].map(
           (key) => `https://models.example/fixture/${key}.bin`,
@@ -119,9 +118,7 @@ it.layer(NodeServices.layer)("VoiceTranscription", (it) => {
 
       yield* service.transcribe(pcm(1));
       expect(loads).toHaveLength(1);
-      expect(Array.from(yield* service.install.pipe(Stream.runCollect))).toEqual([
-        { type: "complete" },
-      ]);
+      expect(yield* service.install).toEqual({ status: "ready" });
       expect(requests).toHaveLength(4);
     }),
   );
@@ -130,15 +127,19 @@ it.layer(NodeServices.layer)("VoiceTranscription", (it) => {
     Effect.gen(function* () {
       const { service, fs, path, modelDir, requests } = yield* makeHarness({ badHash: true });
 
-      const error = yield* service.install.pipe(Stream.runDrain, Effect.flip);
+      const error = yield* service.install.pipe(Effect.flip);
 
       expect(error._tag).toBe("VoiceTranscriptionInstallError");
       expect(error.message).toMatch(/joiner\.bin failed its size or SHA-256 check/);
       expect(yield* fs.readDirectory(path.dirname(modelDir))).toEqual([]);
-      expect(yield* service.status).toEqual({ status: "missing", downloadBytes: 32 });
+      expect(yield* service.status).toEqual({
+        status: "missing",
+        downloadBytes: 32,
+        lastError: error.message,
+      });
       const transcribeError = yield* service.transcribe(pcm(1)).pipe(Effect.flip);
       expect(transcribeError.reason).toBe("model_missing");
-      yield* service.install.pipe(Stream.runDrain, Effect.flip);
+      yield* service.install.pipe(Effect.flip);
       expect(requests).toHaveLength(6);
     }),
   );
@@ -150,7 +151,7 @@ it.layer(NodeServices.layer)("VoiceTranscription", (it) => {
   ])("rejects $name audio", ({ audio }) =>
     Effect.gen(function* () {
       const { service, decoded } = yield* makeHarness();
-      yield* service.install.pipe(Stream.runDrain);
+      yield* service.install;
 
       const error = yield* service.transcribe(audio).pipe(Effect.flip);
 
@@ -167,7 +168,7 @@ it.layer(NodeServices.layer)("VoiceTranscription", (it) => {
         status: "unsupported",
         reason: "Not on this machine.",
       });
-      const installError = yield* service.install.pipe(Stream.runDrain, Effect.flip);
+      const installError = yield* service.install.pipe(Effect.flip);
       expect(installError.message).toBe("Not on this machine.");
       expect((yield* service.transcribe(pcm(1)).pipe(Effect.flip)).reason).toBe("unsupported");
       expect(requests).toEqual([]);
