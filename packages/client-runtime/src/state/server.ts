@@ -1599,6 +1599,18 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:check-otlp-endpoint",
       tag: WS_METHODS.serverCheckOtlpEndpoint,
     }),
+    getVoiceTranscriptionStatus: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:voice:get-transcription-status",
+      tag: WS_METHODS.voiceGetTranscriptionStatus,
+    }),
+    installVoiceTranscriptionModel: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:voice:install-transcription-model",
+      tag: WS_METHODS.voiceInstallTranscriptionModel,
+    }),
+    transcribeVoice: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:voice:transcribe",
+      tag: WS_METHODS.voiceTranscribe,
+    }),
     retryResourceTelemetry: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:retry-resource-telemetry",
       tag: WS_METHODS.serverRetryResourceTelemetry,

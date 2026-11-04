@@ -201,6 +201,7 @@ import {
   ComposerQueuedAttachmentRow,
   ComposerRestingImagePreviews,
 } from "./ComposerAttachmentStrip";
+import { ComposerVoiceButton } from "./ComposerVoiceButton";
 import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
 import { ComposerFooterPrimaryActions } from "./ComposerFooterControls";
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
@@ -3144,6 +3145,19 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         onRemoveFile={removeComposerFileFromDraft}
       />
     ) : null;
+  const readVoiceDraft = useStableCallback(() => {
+    const text = promptRef.current;
+    const selection = composerEditorRef.current?.readSelectionRange() ?? {
+      start: text.length,
+      end: text.length,
+    };
+    return { text, selection };
+  });
+  const commitVoiceDraft = useStableCallback((text: string, cursor: number) => {
+    applyPromptReplacement(0, promptRef.current.length, text, {
+      expandedCursorAfterReplace: cursor,
+    });
+  });
   const composerAttachButton = showComposerAttachAction ? (
     <ComposerAttachButton
       addComposerAttachments={addComposerAttachments}
@@ -3497,6 +3511,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 )}
               >
                 {composerAttachButton ? <div className="me-2">{composerAttachButton}</div> : null}
+                <div className="me-2 empty:hidden">
+                  <ComposerVoiceButton
+                    environmentId={environmentId}
+                    ownerKey={composerDraftTargetKey}
+                    readDraft={readVoiceDraft}
+                    commitDraft={commitVoiceDraft}
+                  />
+                </div>
                 <div
                   data-chat-composer-actions="right"
                   data-chat-composer-transition-actions="true"
