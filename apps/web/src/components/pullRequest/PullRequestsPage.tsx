@@ -65,6 +65,8 @@ import { PullRequestCompactFilterMenu } from "./PullRequestCompactFilterMenu";
 import { INVOLVEMENT_TABS, SORT_OPTIONS, STATE_TABS } from "./pullRequestListOptions";
 import { PullRequestsColumn } from "./PullRequestsColumn";
 import { PullRequestListGroups } from "./PullRequestListGroups";
+import { pullRequestPanelReference } from "./usePullRequestDetail";
+import { usePullRequestIntentPrefetch } from "./usePullRequestIntentPrefetch";
 import {
   usePullRequestDisplayGroups,
   usePullRequestQueryFilters,
@@ -1081,6 +1083,9 @@ export function PullRequestsPage() {
     ),
   );
 
+  const prefetchEntry = usePullRequestIntentPrefetch((entry) =>
+    listedPullRequestsBySurface.has(pullRequestListEntryId(entry)),
+  );
   const selectEntry = (entry: PullRequestRowTarget) => {
     if (rightPanelRef === null) return;
     useRightPanelStore.getState().openPullRequest(rightPanelRef, entry);
@@ -1186,6 +1191,7 @@ export function PullRequestsPage() {
           showProvider={showProvider}
           statsRef={registerStatsRow}
           onSelect={selectEntry}
+          onIntent={prefetchEntry}
           hostActionsOf={hostActionsOf}
           onActed={onSpeedAction}
           closingKeys={closingKeys}
@@ -1530,14 +1536,10 @@ export function PullRequestsPage() {
                   selectedEnvironmentId: panelEnvironmentId,
                 });
               }}
-              reference={{
+              reference={pullRequestPanelReference({
+                ...renderedPullRequestSurface,
                 projectId: renderedPullRequestSurface.projectId as ProjectId,
-                repository: renderedPullRequestSurface.repository,
-                number: renderedPullRequestSurface.number,
-                ...(renderedPullRequestSurface.host
-                  ? { host: renderedPullRequestSurface.host }
-                  : {}),
-              }}
+              })}
               listEntry={
                 listedPullRequestsBySurface.get(
                   pullRequestListEntryId(renderedPullRequestSurface),
