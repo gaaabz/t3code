@@ -34,6 +34,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { BackgroundThreadContext } from "./backgroundThread";
 
 const INSTALL_POLL_MS = 1000;
+const HOLD_TO_TALK_MS = 400;
 
 function failureMessage(cause: Cause.Cause<unknown>, fallback: string): string {
   const error = Cause.squash(cause);
@@ -248,6 +249,75 @@ function ComposerVoiceControl(props: Parameters<typeof ComposerVoiceButton>[0]) 
     event.preventDefault();
     toggle();
   });
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const removeHeldSpace = useStableCallback(() => {
+    const draft = props.readDraft();
+    if (!draft) return;
+    const { text, selection } = draft;
+    if (selection.start !== selection.end || text[selection.start - 1] !== " ") return;
+    props.commitDraft(
+      text.slice(0, selection.start - 1) + text.slice(selection.start),
+      selection.start - 1,
+    );
+  });
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- listens for a held space in this composer's editor to dictate while it is held
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let held = false;
+    const disarm = () => {
+      if (timer !== null) clearTimeout(timer);
+      timer = null;
+    };
+    const release = () => {
+      disarm();
+      if (!held) return;
+      held = false;
+      // Released while still preparing (permission, model download): keeps recording until stopped.
+      void controller.stop();
+    };
+    const inThisEditor = (target: EventTarget | null) =>
+      target instanceof Element &&
+      target.closest('[contenteditable="true"]') !== null &&
+      buttonRef.current?.closest("form")?.contains(target) === true;
+    const onKeyDown = (event: KeyboardEvent) => {
+      const plainSpace =
+        event.code === "Space" &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey &&
+        !event.shiftKey &&
+        !event.isComposing;
+      if (!plainSpace) {
+        disarm();
+        return;
+      }
+      if (event.repeat) {
+        if (timer !== null || held) event.preventDefault();
+        return;
+      }
+      const phase = controller.currentState.phase;
+      if (!inThisEditor(event.target) || (phase !== "idle" && phase !== "error")) return;
+      timer = setTimeout(() => {
+        timer = null;
+        held = true;
+        removeHeldSpace();
+        void controller.start();
+      }, HOLD_TO_TALK_MS);
+    };
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.code === "Space") release();
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    window.addEventListener("keyup", onKeyUp, true);
+    window.addEventListener("blur", release);
+    return () => {
+      disarm();
+      window.removeEventListener("keydown", onKeyDown, true);
+      window.removeEventListener("keyup", onKeyUp, true);
+      window.removeEventListener("blur", release);
+    };
+  }, [controller, removeHeldSpace]);
+
   const backgroundThread = use(BackgroundThreadContext);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- registers the dictation shortcut with the command registry while this composer is mounted
   useEffect(() => {
@@ -272,6 +342,7 @@ function ComposerVoiceControl(props: Parameters<typeof ComposerVoiceButton>[0]) 
       <TooltipTrigger
         render={
           <Button
+            ref={buttonRef}
             type="button"
             variant={recording ? "ghost-destructive" : "ghost"}
             size="icon-sm"
