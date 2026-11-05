@@ -37,7 +37,6 @@ import {
   linkThreadPullRequest,
   respondToThreadApproval,
   respondToThreadUserInput,
-  clearThreadProviderContext,
   dismissThreadUserInput,
   revertThreadCheckpoint,
   setThreadInteractionMode,
@@ -297,12 +296,6 @@ export function createThreadEnvironmentAtoms<R, E>(
     stopSession: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:stop-session",
       execute: stopThreadSession,
-      scheduler,
-      concurrency,
-    }),
-    clearProviderContext: createEnvironmentCommand(runtime, {
-      label: "environment-data:commands:thread:clear-provider-context",
-      execute: clearThreadProviderContext,
       scheduler,
       concurrency,
     }),

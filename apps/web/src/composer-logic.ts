@@ -18,14 +18,7 @@ import {
 import { resolveShortcutCommand, type ShortcutEventLike } from "./keybindings";
 
 export type ComposerTriggerKind = "path" | "pull-request" | "slash-command" | "skill";
-export type ComposerSlashCommand =
-  | "model"
-  | "plan"
-  | "default"
-  | "side"
-  | "btw"
-  | "reload"
-  | "clear";
+export type ComposerSlashCommand = "model" | "plan" | "default" | "side" | "btw" | "reload";
 export type ComposerSubmissionIntent = "foreground" | "background" | "alternate";
 
 export interface ComposerTrigger {
@@ -333,7 +326,7 @@ export function parseSideChatCommand(text: string): { prompt: string } | null {
 
 export function parseStandaloneComposerSlashCommand(
   text: string,
-): Exclude<ComposerSlashCommand, "model" | "side" | "btw" | "reload" | "clear"> | null {
+): Exclude<ComposerSlashCommand, "model" | "side" | "btw" | "reload"> | null {
   const match = /^\/(plan|default)\s*$/i.exec(text.trim());
   if (!match) {
     return null;

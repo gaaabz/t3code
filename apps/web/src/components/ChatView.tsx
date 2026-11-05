@@ -187,7 +187,6 @@ import { cn } from "~/lib/utils";
 import { isModelPickerOpen } from "../modelPickerVisibility";
 import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "~/workspaceTitlebar";
 import { toastManager } from "./ui/toast";
-import { useClearThreadContext } from "../hooks/useClearThreadContext";
 import { useReloadThreadSession } from "../hooks/useReloadThreadSession";
 import { projectScriptIdFromCommand } from "~/projectScripts";
 import { newMessageId } from "~/lib/utils";
@@ -2548,20 +2547,6 @@ export default function ChatView(props: ChatViewProps) {
       });
     });
   });
-  const clearThreadContext = useClearThreadContext();
-  const clearContextStable = useStableCallback(() => {
-    if (serverThread === null) return;
-    void clearThreadContext({
-      environmentId: serverThread.environmentId,
-      threadId: serverThread.id,
-    }).catch((error: unknown) => {
-      toastManager.add({
-        type: "error",
-        title: "Could not clear the context",
-        ...(error instanceof Error ? { description: error.message } : {}),
-      });
-    });
-  });
   const handleRestoreThreadBranch = () => {
     if (!canWriteSourceControl) return;
     if (gitStatusQuery.data?.hasWorkingTreeChanges) {
@@ -3714,9 +3699,6 @@ export default function ChatView(props: ChatViewProps) {
                               }
                               onReloadSessionCommand={
                                 isServerThread && !isWorking ? reloadSessionStable : undefined
-                              }
-                              onClearContextCommand={
-                                isServerThread && !isWorking ? clearContextStable : undefined
                               }
                               environmentUnavailable={activeEnvironmentUnavailableState}
                               activePendingApproval={activePendingApproval}

@@ -281,11 +281,6 @@ Provider commands must start the message to run. T3 Code commands such as
 Send `/compact` in an existing conversation to reduce context usage when the
 provider supports it, even with the context meter turned off.
 
-To start over instead, send `/clear` or use **Clear agent context** in the
-command palette on web and desktop. Your next message starts a fresh agent
-conversation with no earlier context, while the thread keeps its title, pin,
-and history. Wait for the current turn to finish before clearing.
-
 On web and desktop, turn on **Settings → Labs → Legacy → Context
 window indicator (legacy)** to see context usage. The meter is off by default
 and appears once the provider reports usage. Open it for usage details and

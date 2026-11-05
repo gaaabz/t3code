@@ -216,8 +216,6 @@ export interface RevertThreadCheckpointInput extends ThreadCommandInput {
 
 export type StopThreadSessionInput = ThreadCommandInput;
 
-export type ClearThreadProviderContextInput = ThreadCommandInput;
-
 export interface ForkThreadFromRunInput extends CommandMetadata {
   readonly sourceThreadId: ThreadId;
   readonly targetThreadId: ThreadId;
@@ -976,16 +974,6 @@ export const stopThreadSession = Effect.fn("EnvironmentCommands.stopThreadSessio
     });
   }
   return result;
-});
-
-export const clearThreadProviderContext = Effect.fn(
-  "EnvironmentCommands.clearThreadProviderContext",
-)(function* (input: ClearThreadProviderContextInput) {
-  return yield* dispatch({
-    type: "thread.provider-context.clear",
-    commandId: yield* allocateCommandId(input),
-    threadId: input.threadId,
-  });
 });
 
 export const forkThreadFromRun = Effect.fn("EnvironmentCommands.forkThreadFromRun")(function* (

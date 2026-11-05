@@ -3143,12 +3143,6 @@ export const OrchestrationV2Command = Schema.Union([
     providerSessionId: ProviderSessionId,
     reason: Schema.optional(Schema.String),
   }),
-  /** Starts the next turn in a fresh provider conversation without a handoff; the thread keeps its history. */
-  Schema.Struct({
-    type: Schema.Literal("thread.provider-context.clear"),
-    commandId: CommandId,
-    threadId: ThreadId,
-  }),
   Schema.Struct({
     type: Schema.Literal("message.dispatch"),
     notification: Schema.optional(OrchestrationV2Notification),
