@@ -86,9 +86,10 @@ export type SpeechEngineLoad =
   | { readonly _tag: "available"; readonly engine: SpeechEngine }
   | { readonly _tag: "unsupported"; readonly reason: string };
 
-const loadSherpaEngine: Effect.Effect<SpeechEngineLoad> = Effect.tryPromise(
-  () => import("sherpa-onnx-node"),
-).pipe(
+const loadSherpaEngine: Effect.Effect<SpeechEngineLoad> = Effect.tryPromise({
+  try: () => import("sherpa-onnx-node"),
+  catch: (cause) => new VoiceTranscribeError({ reason: "unsupported", message: String(cause) }),
+}).pipe(
   Effect.map((sherpa): SpeechEngineLoad => ({
     _tag: "available",
     engine: {
@@ -361,9 +362,16 @@ export const makeVoiceTranscription = Effect.fn("VoiceTranscription.make")(funct
       const samples = decodePcm16(audio);
       // One decode at a time: each one already uses several cores.
       const text = yield* recognizerGate.withPermit(
-        Effect.tryPromise(async () => {
-          recognizer ??= await load.engine.load(paths);
-          return recognizer.transcribe(samples, VOICE_TRANSCRIPTION_SAMPLE_RATE);
+        Effect.tryPromise({
+          try: async () => {
+            recognizer ??= await load.engine.load(paths);
+            return recognizer.transcribe(samples, VOICE_TRANSCRIPTION_SAMPLE_RATE);
+          },
+          catch: (cause) =>
+            new VoiceTranscribeError({
+              reason: "failed",
+              message: `Voice transcription failed. ${String(cause)}`,
+            }),
         }),
       );
       return text.trim();

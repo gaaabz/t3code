@@ -45,7 +45,10 @@ function failureMessage(cause: Cause.Cause<unknown>, fallback: string): string {
 
 function unwrap<A, E>(result: AtomCommandResult<A, E>, fallback: string): A {
   if (result._tag === "Success") return result.value;
-  throw new VoiceTranscriptionError("preparation-failed", failureMessage(result.cause, fallback));
+  throw new VoiceTranscriptionError({
+    code: "preparation-failed",
+    message: failureMessage(result.cause, fallback),
+  });
 }
 
 function waitForPoll(signal: AbortSignal): Promise<void> {
@@ -129,7 +132,10 @@ function ComposerVoiceControl(props: Parameters<typeof ComposerVoiceButton>[0]) 
       );
       throwIfVoiceTranscriptionAborted(signal);
       if (!confirmed) {
-        throw new VoiceTranscriptionError("cancelled", "Voice input needs the voice model.");
+        throw new VoiceTranscriptionError({
+          code: "cancelled",
+          message: "Voice input needs the voice model.",
+        });
       }
       status = unwrap(
         await installModel({ environmentId, input: {} }),
@@ -153,12 +159,12 @@ function ComposerVoiceControl(props: Parameters<typeof ComposerVoiceButton>[0]) 
       case "ready":
         return;
       case "unsupported":
-        throw new VoiceTranscriptionError("unavailable", status.reason);
+        throw new VoiceTranscriptionError({ code: "unavailable", message: status.reason });
       case "missing":
-        throw new VoiceTranscriptionError(
-          "preparation-failed",
-          status.lastError ?? "The voice model is not installed.",
-        );
+        throw new VoiceTranscriptionError({
+          code: "preparation-failed",
+          message: status.lastError ?? "The voice model is not installed.",
+        });
     }
   });
 
@@ -172,10 +178,10 @@ function ComposerVoiceControl(props: Parameters<typeof ComposerVoiceButton>[0]) 
     });
     throwIfVoiceTranscriptionAborted(signal);
     if (result._tag === "Success") return result.value.text;
-    throw new VoiceTranscriptionError(
-      "transcription-failed",
-      failureMessage(result.cause, "Could not transcribe this recording."),
-    );
+    throw new VoiceTranscriptionError({
+      code: "transcription-failed",
+      message: failureMessage(result.cause, "Could not transcribe this recording."),
+    });
   });
 
   // A transcription outlives its composer (switching threads), then reads and writes the stored draft.

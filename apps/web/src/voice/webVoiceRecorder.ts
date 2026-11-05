@@ -79,7 +79,10 @@ export function createWebVoiceRecorder(
       const opened = await openMicrophone();
       if (signal?.aborted) {
         for (const track of opened.getTracks()) track.stop();
-        throw new VoiceTranscriptionError("cancelled", "Voice input was cancelled.");
+        throw new VoiceTranscriptionError({
+          code: "cancelled",
+          message: "Voice input was cancelled.",
+        });
       }
       stream = opened;
       uri = null;
