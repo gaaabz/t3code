@@ -1,7 +1,7 @@
+import type { OrchestrationV2PlanStep } from "@t3tools/contracts";
 import { CircleCheckIcon, CircleDotIcon, CircleIcon } from "lucide-react";
 
 import { cn } from "../../lib/utils";
-import type { LatestTodoList } from "../../session-logic";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
 
 const STEP_ICON = {
@@ -16,21 +16,30 @@ const STEP_STATUS_LABEL = {
   completed: "Done",
 } as const;
 
-/** The agent's latest todo list, updated whenever the agent rewrites it. */
-export function ThreadTasksPanel({ todoList }: { todoList: LatestTodoList }) {
-  const done = todoList.steps.filter((step) => step.status === "completed").length;
+/** The thread's ODD feature tasks, or else the agent's latest todo list. */
+export function ThreadTasksPanel({
+  steps,
+  source,
+}: {
+  steps: ReadonlyArray<OrchestrationV2PlanStep>;
+  source: string | null;
+}) {
+  const done = steps.filter((step) => step.status === "completed").length;
   return (
     <ThreadDetailsSection
       headingId="thread-details-tasks-heading"
       title="Tasks"
       actions={
-        <span className="text-2xs tabular-nums text-muted-foreground">
-          {done}/{todoList.steps.length}
+        <span className="flex min-w-0 items-center gap-2 text-2xs text-muted-foreground">
+          {source ? <span className="truncate">{source}</span> : null}
+          <span className="tabular-nums">
+            {done}/{steps.length}
+          </span>
         </span>
       }
     >
       <ul className="m-0 max-h-64 list-none overflow-y-auto p-0">
-        {todoList.steps.map((step) => {
+        {steps.map((step) => {
           const Icon = STEP_ICON[step.status];
           return (
             <li key={step.id} className="flex min-w-0 items-start gap-2.5 px-2.5 py-1">

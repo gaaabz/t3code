@@ -142,6 +142,7 @@ import {
   hasActionableProposedPlan,
   isLatestRunSettled,
 } from "../session-logic";
+import { findOddFeatureDocument } from "../oddTasks";
 import { type LegendListRef } from "@legendapp/list/react";
 import { useWorkspaceMutationRefresh } from "../hooks/useWorkspaceMutationRefresh";
 import { DEFAULT_INTERACTION_MODE, type ChatMessage } from "../types";
@@ -3966,6 +3967,8 @@ export default function ChatView(props: ChatViewProps) {
                     ? { onCheckoutPullRequestRequest: openPullRequestDialogStable }
                     : {})}
                   todoList={findLatestTodoList(serverProjection)}
+                  oddDocumentPath={findOddFeatureDocument(serverVisibleTurnItems)}
+                  workspaceMutationId={workspaceMutationId}
                   onComposerFocusRequest={scheduleComposerFocusStable}
                   {...(isServerThread && isGitRepo
                     ? { onOpenChanges: openChangesFromThreadPanelStable }

@@ -8,6 +8,7 @@ import type {
 } from "@t3tools/contracts";
 
 import type { DraftId } from "../../composerDraftStore";
+import { useOddFeatureTasks } from "../../hooks/useOddFeatureTasks";
 import { useT3ProjectFileScripts } from "../../hooks/useT3ProjectFileScripts";
 import { type EnvMode, type EnvironmentOption } from "../BranchToolbar.logic";
 import { BranchToolbar } from "../BranchToolbar";
@@ -87,6 +88,8 @@ interface ThreadDetailsPanelProps extends Pick<
   onDeleteProjectScript: (scriptId: string) => Promise<ProjectScriptActionResult>;
   usage: ThreadDetailsUsageInput;
   todoList: LatestTodoList | null;
+  oddDocumentPath: string | null;
+  workspaceMutationId: string | null;
 }
 
 export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
@@ -96,6 +99,20 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
     props.environmentId,
     props.activeProjectScripts && visible.scripts ? props.gitCwd : null,
   );
+  const oddTasks = useOddFeatureTasks({
+    environmentId: props.environmentId,
+    cwd: visible.tasks ? props.gitCwd : null,
+    documentPath: props.oddDocumentPath,
+    mutationId: props.workspaceMutationId,
+  });
+  const tasks = oddTasks
+    ? {
+        steps: oddTasks,
+        source: props.oddDocumentPath?.slice("odd/tasks/".length, -".md".length) ?? null,
+      }
+    : props.todoList
+      ? { steps: props.todoList.steps, source: null }
+      : null;
   const activeThreadRef = { environmentId: props.environmentId, threadId: props.threadId };
   const branchToolbarProps = {
     showGitControls: props.isGitRepo,
@@ -241,8 +258,8 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                 </ThreadDetailsSection>
               ) : null}
 
-              {density === "full" && visible.tasks && props.todoList ? (
-                <ThreadTasksPanel todoList={props.todoList} />
+              {density === "full" && visible.tasks && tasks ? (
+                <ThreadTasksPanel steps={tasks.steps} source={tasks.source} />
               ) : null}
 
               {density === "full" && !props.draftId && visible.servers ? (
