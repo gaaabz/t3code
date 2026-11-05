@@ -57,7 +57,6 @@ import {
   AuthTerminalOperateScope,
   type AssistantCitation,
   type ChatFileAttachment,
-  isProviderContextCleared,
   isProviderNativeSubagentThread,
   orchestrationV2WorktreePending,
   type EnvironmentId,
@@ -91,7 +90,7 @@ import {
   threadSupportsProviderHandoff,
 } from "@t3tools/client-runtime/state/thread-workflows";
 import { resolvePendingHandoff } from "@t3tools/client-runtime/handoff";
-import { ContextClearedRow, HandoffRow } from "./chat/V2LifecycleRow";
+import { HandoffRow } from "./chat/V2LifecycleRow";
 import {
   codexFeedbackMessage,
   deriveWorkspaceMutationId,
@@ -2472,8 +2471,6 @@ export default function ChatView(props: ChatViewProps) {
     pendingHandoffSelectionUsable ? pendingHandoffSelection : null,
     providerStatuses,
   );
-  const contextClearedPending =
-    serverProjection != null && isProviderContextCleared(serverProjection);
   const compactThreadUnavailable =
     !canOperateThread ||
     !activeThread ||
@@ -3152,17 +3149,11 @@ export default function ChatView(props: ChatViewProps) {
   // its lifecycle status, guest messages awaiting you, then your queued messages.
   const timelineFooter =
     pendingHandoff === null &&
-    !contextClearedPending &&
     !hasThreadNow &&
     threadStatusLine === null &&
     pendingGuestMessageCount === 0 &&
     !hasQueuedTurns ? null : (
       <>
-        {contextClearedPending ? (
-          <div className="chat-content-lane">
-            <ContextClearedRow />
-          </div>
-        ) : null}
         {pendingHandoff === null ? null : (
           <div className="chat-content-lane">
             <HandoffRow

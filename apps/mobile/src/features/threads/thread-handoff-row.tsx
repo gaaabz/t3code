@@ -51,10 +51,6 @@ function handoffEndpointsAtom(
   });
 }
 
-export function ThreadContextClearedDivider(props: { iconColor: ColorValue }) {
-  return <ThreadContextDivider label="Context cleared" icon="eraser" iconColor={props.iconColor} />;
-}
-
 /** A same-harness model or effort change. Shows only what changed. */
 export function ThreadModelSwitchDivider(props: {
   environmentId: EnvironmentId;

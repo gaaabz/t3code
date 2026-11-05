@@ -1440,12 +1440,6 @@ describe("orchestration v2 provider switching", () => {
           assert.notEqual(after.runs[1]?.providerThreadId, clearedProviderThreadId);
           assert.equal(after.runs[2]?.providerThreadId, after.runs[1]?.providerThreadId);
           assert.lengthOf(after.contextHandoffs, 0);
-          assert.deepEqual(
-            after.turnItems.flatMap((item) =>
-              item.type === "user_message" ? [item.contextCleared ?? false] : [],
-            ),
-            [false, true, false],
-          );
           const turns = yield* Ref.get(capturedTurns);
           assert.deepEqual(
             turns.map((turn) => turn.text),

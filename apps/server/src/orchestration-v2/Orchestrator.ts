@@ -25,7 +25,6 @@ import {
   type GuestMessageId,
   isCompactionCommandMessage,
   isOrchestrationV2WorkActive,
-  isProviderContextCleared,
   isProviderNativeSubagentThread,
   MessageId,
   type NodeId,
@@ -2155,7 +2154,6 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         completedAt: now,
         updatedAt: now,
         ...(activeHandoff === null ? modelSwitchSince(projection, queuedRun.modelSelection) : {}),
-        ...(isProviderContextCleared(projection) ? { contextCleared: true as const } : {}),
       };
       const handoffTurnItem: OrchestrationV2TurnItem | null =
         activeHandoff === null
@@ -6672,7 +6670,6 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         ...(command.context ? { context: command.context } : {}),
         attachments: command.attachments,
         ...(run.contextHandoffId === null ? modelSwitchSince(projection, modelSelection) : {}),
-        ...(isProviderContextCleared(projection) ? { contextCleared: true as const } : {}),
       };
       const preparationTurnItem: OrchestrationV2TurnItem | null =
         dispatchMode.type === "defer_start"

@@ -16,7 +16,6 @@ import {
 } from "../../lib/enrichedLinkPresentation";
 import { ThreadContextDivider } from "./thread-context-divider";
 import {
-  ThreadContextClearedDivider,
   ThreadHandoffDivider,
   ThreadHandoffRow,
   ThreadModelSwitchDivider,
@@ -355,7 +354,6 @@ export interface ThreadFeedProps {
   readonly workspaceRoot?: string | null;
   readonly feed: ReadonlyArray<ThreadFeedEntry>;
   readonly pendingHandoff?: HandoffEndpoints | null;
-  readonly contextClearedPending?: boolean;
   readonly contentPresentation: ThreadContentPresentation;
   readonly latestRun: ThreadFeedLatestRun | null;
   readonly activeWorkStartedAt: string | null;
@@ -3733,11 +3731,6 @@ export const ThreadFeed = memo(function ThreadFeed({
       >
         <ThreadMediaVisibility>
           {info.item.type === "message" &&
-          info.item.message.projectedItem?.item.type === "user_message" &&
-          info.item.message.projectedItem.item.contextCleared ? (
-            <ThreadContextClearedDivider iconColor={iconSubtleColor} />
-          ) : null}
-          {info.item.type === "message" &&
           !isCompactionCommandFeedEntry(info.item) &&
           info.item.message.projectedItem?.item.type === "user_message" &&
           info.item.message.projectedItem.item.modelSwitch ? (
@@ -3942,20 +3935,15 @@ export const ThreadFeed = memo(function ThreadFeed({
               </>
             }
             ListFooterComponent={
-              <>
-                {props.contextClearedPending ? (
-                  <ThreadContextClearedDivider iconColor={iconSubtleColor} />
-                ) : null}
-                {props.pendingHandoff ? (
-                  <ThreadHandoffDivider
-                    environmentId={props.environmentId}
-                    endpoints={props.pendingHandoff}
-                    iconColor={iconSubtleColor}
-                    surfaceColor={screenColor}
-                    label="Context handoff pending"
-                  />
-                ) : null}
-              </>
+              props.pendingHandoff ? (
+                <ThreadHandoffDivider
+                  environmentId={props.environmentId}
+                  endpoints={props.pendingHandoff}
+                  iconColor={iconSubtleColor}
+                  surfaceColor={screenColor}
+                  label="Context handoff pending"
+                />
+              ) : null
             }
             contentContainerStyle={{
               ...(props.fitShortFeedToViewport ? { minHeight: "100%" } : {}),
