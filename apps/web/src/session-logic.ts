@@ -290,6 +290,29 @@ export function findLatestProposedPlan(
   return plan === undefined ? null : toLatestProposedPlanState(projection, plan);
 }
 
+export type LatestTodoList = Extract<OrchestrationV2PlanArtifact, { readonly kind: "todo_list" }>;
+
+/** Mirrors the server's pick, which keeps this list's steps even when history is paged. */
+export function findLatestTodoList(projection: ThreadStructure | null): LatestTodoList | null {
+  if (projection === null) return null;
+  const runOrdinals = new Map(projection.runs.map((run) => [run.id, run.ordinal]));
+  let latest: LatestTodoList | null = null;
+  let latestOrdinal = -1;
+  for (const plan of projection.plans) {
+    const ordinal = plan.runId === null ? undefined : runOrdinals.get(plan.runId);
+    if (
+      plan.kind === "todo_list" &&
+      plan.status !== "superseded" &&
+      ordinal !== undefined &&
+      ordinal >= latestOrdinal
+    ) {
+      latest = plan;
+      latestOrdinal = ordinal;
+    }
+  }
+  return latest !== null && latest.steps.length > 0 ? latest : null;
+}
+
 export function hasActionableProposedPlan(plan: LatestProposedPlanState | null): boolean {
   return plan?.status === "active";
 }

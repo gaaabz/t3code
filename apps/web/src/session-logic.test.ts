@@ -28,6 +28,7 @@ import {
   deriveTimelineEntriesFromVisibleTurnItemsWithState,
   deriveRevertTurnCountByUserMessageId,
   derivePhase,
+  findLatestTodoList,
   isLatestRunSettled,
   selectHandoffImageResources,
   selectMessageImageResources,
@@ -571,6 +572,66 @@ describe("V2 session presentation", () => {
         optimisticMessages: [],
       }).map((entry) => entry.id),
     ).toEqual([workspacePreparationItem.id]);
+  });
+
+  it("finds the thread's latest live todo list, following edits", () => {
+    const base = makeThreadProjectionFixture();
+    const runs = [1, 2].map((ordinal) => ({
+      id: RunId.make(`run-${ordinal}`),
+      threadId: base.thread.id,
+      ordinal,
+      providerInstanceId: base.thread.providerInstanceId,
+      modelSelection: base.thread.modelSelection,
+      providerThreadId: null,
+      userMessageId: MessageId.make(`message-${ordinal}`),
+      rootNodeId: null,
+      activeAttemptId: null,
+      status: "completed" as const,
+      requestedAt: base.updatedAt,
+      startedAt: base.updatedAt,
+      completedAt: base.updatedAt,
+      checkpointId: null,
+      contextHandoffId: null,
+    }));
+    const todo = (
+      id: string,
+      runOrdinal: number,
+      status: "active" | "superseded",
+      steps: ReadonlyArray<{ id: string; text: string; status: "pending" | "completed" }>,
+    ) => ({
+      id: PlanId.make(id),
+      threadId: base.thread.id,
+      runId: RunId.make(`run-${runOrdinal}`),
+      nodeId: NodeId.make(`node-${id}`),
+      kind: "todo_list" as const,
+      status,
+      steps,
+    });
+    const projection = (plans: ReadonlyArray<ReturnType<typeof todo>>) => ({
+      ...base,
+      runs,
+      plans,
+    });
+
+    const older = todo("plan-old", 1, "active", [{ id: "a", text: "Old", status: "pending" }]);
+    const latest = todo("plan-new", 2, "active", [
+      { id: "t1", text: "T1", status: "completed" },
+      { id: "t2", text: "T2", status: "pending" },
+    ]);
+    expect(findLatestTodoList(projection([latest, older]))?.id).toBe(latest.id);
+
+    const edited = {
+      ...latest,
+      steps: [...latest.steps, { id: "t3", text: "T3", status: "pending" as const }],
+    };
+    expect(findLatestTodoList(projection([older, edited]))?.steps.map((step) => step.text)).toEqual(
+      ["T1", "T2", "T3"],
+    );
+
+    expect(findLatestTodoList(projection([older, { ...latest, status: "superseded" }]))?.id).toBe(
+      older.id,
+    );
+    expect(findLatestTodoList(projection([]))).toBeNull();
   });
 
   it.each(["pending", "running", "completed"] as const)(

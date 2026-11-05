@@ -136,6 +136,7 @@ import {
   deriveActiveWorkStartedAt,
   deriveCanInterruptRunningThread,
   findLatestProposedPlan,
+  findLatestTodoList,
   findRevertCheckpoint,
   hasActionableProposedPlan,
   isLatestRunSettled,
@@ -3972,6 +3973,7 @@ export default function ChatView(props: ChatViewProps) {
                   {...(canCheckoutPullRequestIntoThread
                     ? { onCheckoutPullRequestRequest: openPullRequestDialogStable }
                     : {})}
+                  todoList={findLatestTodoList(serverProjection)}
                   onComposerFocusRequest={scheduleComposerFocusStable}
                   {...(isServerThread && isGitRepo
                     ? { onOpenChanges: openChangesFromThreadPanelStable }

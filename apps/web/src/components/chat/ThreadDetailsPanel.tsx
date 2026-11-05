@@ -23,6 +23,8 @@ import { ThreadDetailsSection } from "./ThreadDetailsSection";
 import { ThreadAutomationsPanel } from "./ThreadAutomationsPanel";
 import { ThreadRelationshipsPanel } from "./ThreadRelationshipsControl";
 import { ThreadServersPanel } from "./ThreadServersPanel";
+import { ThreadTasksPanel } from "./ThreadTasksPanel";
+import type { LatestTodoList } from "../../session-logic";
 import {
   ThreadDetailsContext,
   ThreadDetailsUsage,
@@ -84,6 +86,7 @@ interface ThreadDetailsPanelProps extends Pick<
   ) => Promise<ProjectScriptActionResult>;
   onDeleteProjectScript: (scriptId: string) => Promise<ProjectScriptActionResult>;
   usage: ThreadDetailsUsageInput;
+  todoList: LatestTodoList | null;
 }
 
 export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
@@ -236,6 +239,10 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                     ) : null}
                   </div>
                 </ThreadDetailsSection>
+              ) : null}
+
+              {density === "full" && visible.tasks && props.todoList ? (
+                <ThreadTasksPanel todoList={props.todoList} />
               ) : null}
 
               {density === "full" && !props.draftId && visible.servers ? (
