@@ -20,7 +20,8 @@ export type PreviewMiniPlayerSource =
       readonly deviceId: string;
       readonly platform: DevicePlatform;
       readonly name: string;
-    };
+    }
+  | { readonly kind: "excalidraw"; readonly cwd: string; readonly relativePath: string };
 
 export interface PreviewMiniPlayerState {
   readonly source: PreviewMiniPlayerSource;
@@ -49,9 +50,14 @@ interface PreviewMiniPlayerStoreState {
 }
 
 export function previewMiniPlayerSourceKey(source: PreviewMiniPlayerSource): string {
-  return source.kind === "browser"
-    ? `browser:${source.tabId}`
-    : `device:${encodeURIComponent(source.hostId)}:${encodeURIComponent(source.deviceId)}`;
+  switch (source.kind) {
+    case "browser":
+      return `browser:${source.tabId}`;
+    case "device":
+      return `device:${encodeURIComponent(source.hostId)}:${encodeURIComponent(source.deviceId)}`;
+    case "excalidraw":
+      return `excalidraw:${encodeURIComponent(source.cwd)}:${encodeURIComponent(source.relativePath)}`;
+  }
 }
 
 export const browserMiniPlayerSource = (tabId: string): PreviewMiniPlayerSource => ({

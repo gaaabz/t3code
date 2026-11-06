@@ -5,6 +5,7 @@ import { PanelRightIcon, PictureInPicture2, XIcon } from "lucide-react";
 import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
+  Suspense,
   useEffect,
   useRef,
   useState,
@@ -49,6 +50,9 @@ import {
 } from "~/previewMiniPlayerStore";
 import { useRightPanelStore } from "~/rightPanelStore";
 import { useDeviceState } from "~/state/device";
+import { useTheme } from "~/hooks/useTheme";
+import { ExcalidrawFloatingDrawing } from "../files/ExcalidrawFilePreview";
+import { useProjectFileQuery } from "../files/projectFilesQueryState";
 
 import { DeviceStreamView } from "../device/DeviceStreamView";
 import type { DeviceScreenSize } from "@t3tools/client-runtime/device/stream";
@@ -109,6 +113,8 @@ const useStreamedSourceSize = create<{
   readonly key: string;
   readonly viewport: PreviewStreamViewport;
 } | null>(() => null);
+
+const DEFAULT_DRAWING_SIZE: PreviewMiniPlayerSize = { width: 800, height: 600 };
 
 const NO_DEVICE_SCREEN_ATOM = Atom.make<DeviceScreenSize | null>(null).pipe(
   Atom.withLabel("device-stream-screen:none"),
@@ -177,6 +183,11 @@ export function useThreadPreviewCanvasSource(
       ? deviceStreamScreenAtom(miniPlayerDeviceViewId(threadRef, source))
       : NO_DEVICE_SCREEN_ATOM,
   );
+  const drawingSize = useStreamedSourceSize((state) =>
+    threadRef && sourceKey !== null && state?.key === streamedSourceKey(threadRef, sourceKey)
+      ? state.viewport
+      : null,
+  );
   if (!miniPlayer || !source || sourceKey === null) return null;
   if (source.kind === "browser" && !browser.snapshot) return null;
   return {
@@ -187,26 +198,111 @@ export function useThreadPreviewCanvasSource(
     source:
       source.kind === "browser"
         ? browser.sourceSize
-        : resolveDeviceMiniPlayerSourceSize(source.platform, screen),
+        : source.kind === "device"
+          ? resolveDeviceMiniPlayerSourceSize(source.platform, screen)
+          : (drawingSize ?? DEFAULT_DRAWING_SIZE),
   };
 }
 
 export function ThreadPreviewMiniPlayer({ threadRef, miniPlayer }: Props) {
   const { source } = miniPlayer;
-  return source.kind === "browser" ? (
-    <BrowserMiniPlayer
-      key={source.tabId}
+  switch (source.kind) {
+    case "browser":
+      return (
+        <BrowserMiniPlayer
+          key={source.tabId}
+          threadRef={threadRef}
+          tabId={source.tabId}
+          miniPlayer={miniPlayer}
+        />
+      );
+    case "device":
+      return (
+        <DeviceMiniPlayer
+          key={previewMiniPlayerSourceKey(source)}
+          threadRef={threadRef}
+          source={source}
+          miniPlayer={miniPlayer}
+        />
+      );
+    case "excalidraw":
+      return (
+        <ExcalidrawMiniPlayer
+          key={previewMiniPlayerSourceKey(source)}
+          threadRef={threadRef}
+          source={source}
+          miniPlayer={miniPlayer}
+        />
+      );
+  }
+}
+
+function ExcalidrawMiniPlayer({
+  threadRef,
+  source,
+  miniPlayer,
+}: Props & { readonly source: Extract<PreviewMiniPlayerSource, { kind: "excalidraw" }> }) {
+  const { resolvedTheme } = useTheme();
+  const file = useProjectFileQuery(threadRef.environmentId, source.cwd, source.relativePath);
+  const sourceKey = streamedSourceKey(threadRef, previewMiniPlayerSourceKey(source));
+  const sourceSize =
+    useStreamedSourceSize((state) => (state?.key === sourceKey ? state.viewport : null)) ??
+    DEFAULT_DRAWING_SIZE;
+  const name = source.relativePath.split("/").pop() ?? source.relativePath;
+
+  const openInPanel = () => {
+    usePreviewMiniPlayerStore.getState().close(threadRef);
+    useRightPanelStore.getState().openFile(threadRef, source.relativePath);
+  };
+  const reportSize = (viewport: PreviewMiniPlayerSize) =>
+    useStreamedSourceSize.setState(
+      (state) =>
+        state?.key === sourceKey &&
+        state.viewport.width === viewport.width &&
+        state.viewport.height === viewport.height
+          ? state
+          : { key: sourceKey, viewport },
+      true,
+    );
+
+  const message = file.readError
+    ? "Could not read this drawing."
+    : file.data?.truncated
+      ? "This drawing is larger than the 1 MB preview limit."
+      : null;
+  return (
+    <MiniPlayerShell
       threadRef={threadRef}
-      tabId={source.tabId}
       miniPlayer={miniPlayer}
-    />
-  ) : (
-    <DeviceMiniPlayer
-      key={previewMiniPlayerSourceKey(source)}
-      threadRef={threadRef}
-      source={source}
-      miniPlayer={miniPlayer}
-    />
+      sourceSize={sourceSize}
+      label="Floating Excalidraw preview"
+      onOpenInPanel={openInPanel}
+    >
+      {() => (
+        <div
+          className="pointer-events-auto absolute inset-0 overflow-hidden rounded-[inherit] bg-background"
+          style={{ zIndex: PREVIEW_MINI_PLAYER_WEBVIEW_Z_INDEX }}
+        >
+          {message !== null ? (
+            <div
+              role="alert"
+              className="flex size-full items-center justify-center p-4 text-center text-xs text-muted-foreground"
+            >
+              {message}
+            </div>
+          ) : file.data ? (
+            <Suspense fallback={null}>
+              <ExcalidrawFloatingDrawing
+                text={file.data.contents}
+                name={name}
+                theme={resolvedTheme}
+                onSize={reportSize}
+              />
+            </Suspense>
+          ) : null}
+        </div>
+      )}
+    </MiniPlayerShell>
   );
 }
 

@@ -245,6 +245,15 @@
       }
     },
     {
+      "name": "@excalidraw/excalidraw",
+      "version": "0.18.1",
+      "sourceUrl": "https://github.com/excalidraw/excalidraw",
+      "generatedNotice": {
+        "licenseId": "MIT",
+        "copyrights": ["Copyright (c) 2020 Excalidraw"]
+      }
+    },
+    {
       "name": "xml-naming",
       "version": "0.1.0",
       "sourceUrl": "https://github.com/NaturalIntelligence/xml-naming",

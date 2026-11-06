@@ -148,6 +148,12 @@ export function shouldRenderPreviewMiniPlayer(
       renderedRightPanelSurface.resourceId === source.tabId
     );
   }
+  if (source.kind === "excalidraw") {
+    return !(
+      renderedRightPanelSurface?.kind === "file" &&
+      renderedRightPanelSurface.relativePath === source.relativePath
+    );
+  }
   return !(
     renderedRightPanelSurface?.kind === "device" &&
     renderedRightPanelSurface.target?.hostId === source.hostId &&

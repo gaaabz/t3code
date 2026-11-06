@@ -58,6 +58,7 @@ import { MorphIcon } from "~/components/MorphIcon";
 import { useRemoteOpenState } from "~/remoteOpen";
 import { useClientSettings } from "~/hooks/useSettings";
 import { useTheme } from "~/hooks/useTheme";
+import { ExcalidrawFilePreview, isExcalidrawPreviewFile } from "./ExcalidrawFilePreview";
 import { getLocalStorageItem, setLocalStorageItem, useLocalStorage } from "~/hooks/useLocalStorage";
 import { resolveDiffThemeName } from "~/lib/diffRendering";
 import { PREFERRED_HIGHLIGHTER } from "~/lib/syntaxHighlighting";
@@ -967,10 +968,11 @@ function RenderedMarkdownSurface({
 }
 
 function renderedToggleLabel(
-  mode: "markdown" | "mermaid" | "html" | "table",
+  mode: "markdown" | "mermaid" | "excalidraw" | "html" | "table",
   rendered: boolean,
 ): string {
   if (mode === "mermaid") return rendered ? "Show Mermaid source" : "Show rendered diagram";
+  if (mode === "excalidraw") return rendered ? "Show Excalidraw source" : "Show rendered drawing";
   if (mode === "markdown") return rendered ? "Show markdown source" : "Show rendered markdown";
   if (mode === "table") return rendered ? "Show source" : "Show table";
   return rendered ? "Show HTML source" : "Show rendered page";
@@ -1101,6 +1103,12 @@ export default function FilePreviewPanel({
     true,
     Schema.Boolean,
   );
+  const isExcalidraw = previewPath !== null && isExcalidrawPreviewFile(previewPath);
+  const [renderExcalidrawPreferred, setRenderExcalidrawPreferred] = useLocalStorage(
+    "t3code.renderExcalidraw",
+    true,
+    Schema.Boolean,
+  );
   const tableDelimiter =
     previewPath && attachment === undefined ? filePreviewDelimiter({ name: previewPath }) : null;
   const revealHandled =
@@ -1108,17 +1116,20 @@ export default function FilePreviewPanel({
     (handledReveal?.path === relativePath && handledReveal.requestId === revealRequestId);
   const renderMarkdown = isMarkdown && renderMarkdownPreferred && revealHandled;
   const renderMermaid = isMermaid && renderMermaidPreferred && revealHandled;
+  const renderExcalidraw = isExcalidraw && renderExcalidrawPreferred && revealHandled;
   const renderBrowserFile = isPdf || (isHtml && renderBrowserFilePreferred && revealHandled);
   const renderTable = tableDelimiter !== null && renderTablePreferred && revealHandled;
   const renderedMode = isMermaid
     ? ("mermaid" as const)
-    : isMarkdown
-      ? ("markdown" as const)
-      : tableDelimiter
-        ? ("table" as const)
-        : isHtml
-          ? ("html" as const)
-          : null;
+    : isExcalidraw
+      ? ("excalidraw" as const)
+      : isMarkdown
+        ? ("markdown" as const)
+        : tableDelimiter
+          ? ("table" as const)
+          : isHtml
+            ? ("html" as const)
+            : null;
   const canToggleRendered =
     previewPath !== null && attachment === undefined && renderedMode !== null;
   const showsRawText =
@@ -1126,23 +1137,28 @@ export default function FilePreviewPanel({
     file.data !== null &&
     !(isMarkdown && renderMarkdown) &&
     !renderMermaid &&
+    !renderExcalidraw &&
     !(tableDelimiter && renderTable) &&
     !renderBrowserFile &&
     !isDocument;
   const rendered = isMermaid
     ? renderMermaid
-    : isMarkdown
-      ? renderMarkdown
-      : tableDelimiter
-        ? renderTable
-        : renderBrowserFile;
+    : isExcalidraw
+      ? renderExcalidraw
+      : isMarkdown
+        ? renderMarkdown
+        : tableDelimiter
+          ? renderTable
+          : renderBrowserFile;
   const setRenderedPreferred = isMermaid
     ? setRenderMermaidPreferred
-    : isMarkdown
-      ? setRenderMarkdownPreferred
-      : tableDelimiter
-        ? setRenderTablePreferred
-        : setRenderBrowserFilePreferred;
+    : isExcalidraw
+      ? setRenderExcalidrawPreferred
+      : isMarkdown
+        ? setRenderMarkdownPreferred
+        : tableDelimiter
+          ? setRenderTablePreferred
+          : setRenderBrowserFilePreferred;
   const canOpenInBrowser =
     canOperatePreview &&
     previewPath !== null &&
@@ -1337,7 +1353,7 @@ export default function FilePreviewPanel({
       !isMedia &&
       !renderBrowserFile &&
       file.data?.truncated &&
-      (draft || isMarkdown || isMermaid || isHtml) ? (
+      (draft || isMarkdown || isMermaid || isExcalidraw || isHtml) ? (
         <div className="shrink-0 border-b border-warning/20 bg-warning-surface px-3 py-1.5 text-2xs text-warning-foreground">
           Preview limited to the first 1 MB of a {file.data.byteLength.toLocaleString()} byte file.
         </div>
@@ -1407,6 +1423,7 @@ export default function FilePreviewPanel({
             !draft &&
             !isMarkdown &&
             !isMermaid &&
+            !isExcalidraw &&
             !isHtml ? (
             <WorkspaceLargeTextPreview
               key={`${absolutePath}:${renderTable}:${fileRefreshRevision}`}
@@ -1479,6 +1496,20 @@ export default function FilePreviewPanel({
               <Suspense fallback={<FileSurfaceLoading />}>
                 <MermaidFilePreview text={file.data.contents} />
               </Suspense>
+            ) : renderExcalidraw ? (
+              file.data.truncated ? (
+                <div role="alert" className="p-6 text-xs text-muted-foreground">
+                  This drawing is larger than the 1 MB preview limit. Show Excalidraw source to
+                  inspect it.
+                </div>
+              ) : (
+                <ExcalidrawFilePreview
+                  key={relativePath}
+                  text={file.data.contents}
+                  name={relativePath.split("/").pop() ?? relativePath}
+                  theme={resolvedTheme}
+                />
+              )
             ) : isMarkdown && renderMarkdown ? (
               <RenderedMarkdownSurface
                 key={relativePath}

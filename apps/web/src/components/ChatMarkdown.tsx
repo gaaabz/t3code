@@ -193,6 +193,8 @@ import { MarkdownCodeBlock, SuspenseShikiCodeBlock } from "./chat/MarkdownCodeBl
 import { createMarkdownRenderer } from "./chat/markdownRenderer";
 import { splitMarkdownBlocks } from "./chat/markdownStreamBlocks";
 import { MarkdownMermaidCodeBlock } from "./chat/MarkdownMermaidCodeBlock";
+import { isExcalidrawPreviewFile } from "./files/ExcalidrawFilePreview";
+import { usePreviewMiniPlayerStore } from "../previewMiniPlayerStore";
 import { MarkdownTable } from "./chat/MarkdownTable";
 import { MarkdownDetails } from "./chat/MarkdownDetails";
 import {
@@ -792,8 +794,15 @@ function useChatMarkdownState({
     if (!threadRef) return;
     // Every open supersedes pending lookups, including synchronous opens.
     const isLatestLookup = claimWorkspaceBasenameLookup();
-    const openAt = (path: string) =>
+    const openAt = (path: string) => {
+      if (cwd && isExcalidrawPreviewFile(path)) {
+        usePreviewMiniPlayerStore
+          .getState()
+          .open(threadRef, { kind: "excalidraw", cwd, relativePath: path });
+        return;
+      }
       useRightPanelStore.getState().openFile(threadRef, path, fileLinkMeta.line);
+    };
     if (
       fileLinkMeta.workspaceLookupPath === null ||
       !cwd ||

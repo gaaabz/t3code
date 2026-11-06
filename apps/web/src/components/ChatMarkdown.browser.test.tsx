@@ -9,6 +9,10 @@ import "../index.css";
 
 import { filesystemEnvironment } from "../state/filesystem";
 import { useRightPanelStore } from "../rightPanelStore";
+import {
+  selectThreadPreviewMiniPlayer,
+  usePreviewMiniPlayerStore,
+} from "../previewMiniPlayerStore";
 import { setMarkdownTaskChecked } from "@t3tools/shared/markdownTaskList";
 import { HostImageUrlContext } from "./chat/hostImageUrl";
 
@@ -364,6 +368,25 @@ describe("ChatMarkdown workspace file opens", () => {
 
     expect(openFile).toHaveBeenCalledExactlyOnceWith(threadRef, "/elsewhere/b.md", 9);
     expect(workspaceSearch).toHaveBeenCalledOnce();
+  });
+
+  it("opens an Excalidraw drawing in the floating preview instead of the panel", async () => {
+    setup();
+    using openFile = vi
+      .spyOn(useRightPanelStore.getState(), "openFile")
+      .mockImplementation(() => {});
+    await using screen = await renderText("[Diagram](/school/physics/docs/flow.excalidraw)", {
+      cwd: "/school/physics",
+      threadRef,
+    });
+    await act(async () => screen.container.querySelector("a")!.click());
+
+    expect(openFile).not.toHaveBeenCalled();
+    expect(
+      selectThreadPreviewMiniPlayer(usePreviewMiniPlayerStore.getState().byThreadKey, threadRef)
+        ?.source,
+    ).toEqual({ kind: "excalidraw", cwd: "/school/physics", relativePath: "docs/flow.excalidraw" });
+    usePreviewMiniPlayerStore.getState().removeThread(threadRef);
   });
 });
 
