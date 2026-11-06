@@ -46,6 +46,8 @@ macOS and Ctrl elsewhere). Press again, or the check mark, to finish; `Esc`
 discards the recording and leaves your draft unchanged. Recordings last up to
 five minutes. Text is inserted at the cursor or replaces the selection you had
 when recording started, and the editor is read-only while dictation runs.
+While typing in the composer, you can also hold **Space** to record and release it
+to transcribe; a quick tap still types a space.
 
 Pressing Send while dictating finishes the recording and sends the draft once
 the transcript has been inserted. Cancelling also cancels that queued send. In

@@ -138,6 +138,7 @@ import {
 } from "../../lib/attachmentUploadQueue";
 import { attachmentUploadBlockReason } from "../../lib/attachmentUploadState";
 import { useDictationShortcut } from "../../speech/useDictationShortcut";
+import { useHoldSpaceDictation } from "../../speech/useHoldSpaceDictation";
 import { useDictationSubmissionShortcut } from "../../speech/useDictationSubmissionShortcut";
 import { useEnvironmentSpeechInput } from "../../speech/useEnvironmentSpeechInput";
 import { ComposerSpeechButton, ComposerSpeechRecordingPill } from "./ComposerSpeechButton";
@@ -1890,6 +1891,21 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     terminalOpen,
     modelPickerOpen: isComposerModelPickerOpen,
     ...(backgroundThread ? { targetRef: composerFormRef } : {}),
+  });
+  useHoldSpaceDictation({
+    speech: speechInput,
+    disabled: dictationDisabled,
+    scopeRef: composerFormRef,
+    removeTypedSpace: () => {
+      const snapshot = readComposerSnapshot();
+      const selection = composerEditorRef.current?.readSelectionRange();
+      if (!selection || selection.start !== selection.end) return;
+      if (snapshot.value[selection.start - 1] !== " ") return;
+      applyPromptReplacement(selection.start - 1, selection.start, "", {
+        expectedText: snapshot.value,
+        expandedCursorAfterReplace: selection.start - 1,
+      });
+    },
   });
 
   const resolveActiveComposerTrigger = (): {
