@@ -24,7 +24,6 @@ import {
   createStagePatchedDependencies,
   createStageWorkspaceConfig,
   resolveFffNativeDependencies,
-  resolveSherpaOnnxNativeDependencies,
   STAGE_INSTALL_ARGS,
 } from "./build-desktop-artifact.ts";
 import { assertLinuxArm64PageCompatibility } from "./lib/linux-arm64-sea.ts";
@@ -160,7 +159,6 @@ const stageRuntimeExternals = Effect.fn("stageRuntimeExternals")(function* (inpu
   const dependencies = {
     ...selectCliRuntimeExternalDependencies(serverDependencies),
     ...resolveFffNativeDependencies(input.platform, input.arch, fffNodeVersion),
-    ...resolveSherpaOnnxNativeDependencies(input.platform, input.arch, serverDependencies),
   };
   const patchedDependencies = createStagePatchedDependencies(
     workspace.patchedDependencies ?? {},

@@ -38,6 +38,7 @@ import {
   packWindowsServerAsar,
   preflightWindowsDesktopBuild,
   renderMacPasskeyEntitlements,
+  resolveMacFileExclusions,
   resolveMacWebAuthnEntitlements,
   resolveMacPasskeySigningConfiguration,
   resolveMergedStageDependencies,
@@ -597,12 +598,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     assert.deepStrictEqual(
       resolveMergedStageDependencies({
         platform: "linux",
-        serverDependencies: {
-          "@ff-labs/fff-node": "0.9.4",
-          "node-pty": "1.1.0",
-          "sherpa-onnx-node": "2.0.1",
-          effect: "4.0.0",
-        },
+        serverDependencies: { "@ff-labs/fff-node": "0.9.4", "node-pty": "1.1.0", effect: "4.0.0" },
         desktopDependencies: { "@crowecawcaw/xa11y": "0.13.0" },
         arch: "x64",
         fffNodeVersion: "0.9.4",
@@ -610,28 +606,9 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       {
         "@ff-labs/fff-node": "0.9.4",
         "node-pty": "1.1.0",
-        "sherpa-onnx-node": "2.0.1",
         "@crowecawcaw/xa11y": "0.13.0",
         "@ff-labs/fff-bin-linux-x64-gnu": "0.9.4",
         "@ff-labs/fff-bin-linux-x64-musl": "0.9.4",
-        "sherpa-onnx-linux-x64": "2.0.1",
-      },
-    );
-
-    assert.deepStrictEqual(
-      resolveMergedStageDependencies({
-        platform: "mac",
-        serverDependencies: { "sherpa-onnx-node": "2.0.1" },
-        desktopDependencies: {},
-        arch: "universal",
-        fffNodeVersion: "0.9.4",
-      }),
-      {
-        "sherpa-onnx-node": "2.0.1",
-        "@ff-labs/fff-bin-darwin-arm64": "0.9.4",
-        "@ff-labs/fff-bin-darwin-x64": "0.9.4",
-        "sherpa-onnx-darwin-arm64": "2.0.1",
-        "sherpa-onnx-darwin-x64": "2.0.1",
       },
     );
   });
@@ -687,6 +664,30 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       }),
     ),
   );
+
+  it("drops the other architecture's Darwin prebuilds from single-architecture Mac builds", () => {
+    const excludes = (arch: "arm64" | "x64" | "universal", file: string) =>
+      resolveMacFileExclusions(arch).some((glob) => NodePath.matchesGlob(file, glob.slice(1)));
+    const x64 = [
+      "node_modules/node-pty/prebuilds/darwin-x64/pty.node",
+      "node_modules/objc-js/prebuilds/darwin-x64/node.napi.node",
+    ];
+    const arm64 = [
+      "node_modules/node-pty/prebuilds/darwin-arm64/pty.node",
+      "node_modules/objc-js/prebuilds/darwin-arm64/node.napi.armv8.node",
+    ];
+
+    for (const file of x64) {
+      assert.isTrue(excludes("arm64", file), file);
+      assert.isFalse(excludes("x64", file), file);
+      assert.isFalse(excludes("universal", file), file);
+    }
+    for (const file of arm64) {
+      assert.isTrue(excludes("x64", file), file);
+      assert.isFalse(excludes("arm64", file), file);
+      assert.isFalse(excludes("universal", file), file);
+    }
+  });
 
   it.effect("unpacks target Windows natives while excluding the other architecture", () =>
     Effect.scoped(

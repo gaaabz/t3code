@@ -148,7 +148,7 @@
       "generatedNotices": [
         {
           "licenseId": "Apache-2.0",
-          "copyrights": ["Copyright 2009, 2010, 2013 Andr00e9 Berg"]
+          "copyrights": ["Copyright 2009, 2010, 2013 Andr\u00e9 Berg"]
         }
       ]
     },
@@ -330,9 +330,7 @@
       "version": "0.4.0",
       "license": "Apache-2.0 AND OFL-1.1",
       "generatedNotices": [
-        {
-          "licenseId": "Apache-2.0"
-        },
+        { "licenseId": "Apache-2.0" },
         {
           "licenseId": "OFL-1.1",
           "copyrights": [
@@ -879,125 +877,6 @@
       "name": "iobuffer",
       "license": "MIT",
       "sourceUrl": "https://github.com/image-js/iobuffer"
-    },
-    {
-      "name": "sherpa-onnx-node",
-      "license": "Apache-2.0",
-      "sourceUrl": "https://github.com/k2-fsa/sherpa-onnx",
-      "generatedNotices": [
-        {
-          "licenseId": "Apache-2.0",
-          "copyrights": ["Copyright (c) 2022-2025 Xiaomi Corporation"]
-        }
-      ]
-    },
-    {
-      "name": "sherpa-onnx-win-x64",
-      "license": "Apache-2.0 AND MIT",
-      "sourceUrl": "https://github.com/k2-fsa/sherpa-onnx",
-      "generatedNotices": [
-        {
-          "licenseId": "Apache-2.0",
-          "copyrights": ["Copyright (c) 2022-2025 Xiaomi Corporation"]
-        },
-        {
-          "licenseId": "MIT",
-          "preamble": [
-            "This package includes ONNX Runtime: https://github.com/microsoft/onnxruntime"
-          ],
-          "copyrights": ["Copyright (c) Microsoft Corporation"]
-        }
-      ]
-    },
-    {
-      "name": "sherpa-onnx-win-arm64",
-      "license": "Apache-2.0 AND MIT",
-      "sourceUrl": "https://github.com/k2-fsa/sherpa-onnx",
-      "generatedNotices": [
-        {
-          "licenseId": "Apache-2.0",
-          "copyrights": ["Copyright (c) 2022-2025 Xiaomi Corporation"]
-        },
-        {
-          "licenseId": "MIT",
-          "preamble": [
-            "This package includes ONNX Runtime: https://github.com/microsoft/onnxruntime"
-          ],
-          "copyrights": ["Copyright (c) Microsoft Corporation"]
-        }
-      ]
-    },
-    {
-      "name": "sherpa-onnx-linux-x64",
-      "license": "Apache-2.0 AND MIT",
-      "sourceUrl": "https://github.com/k2-fsa/sherpa-onnx",
-      "generatedNotices": [
-        {
-          "licenseId": "Apache-2.0",
-          "copyrights": ["Copyright (c) 2022-2025 Xiaomi Corporation"]
-        },
-        {
-          "licenseId": "MIT",
-          "preamble": [
-            "This package includes ONNX Runtime: https://github.com/microsoft/onnxruntime"
-          ],
-          "copyrights": ["Copyright (c) Microsoft Corporation"]
-        }
-      ]
-    },
-    {
-      "name": "sherpa-onnx-linux-arm64",
-      "license": "Apache-2.0 AND MIT",
-      "sourceUrl": "https://github.com/k2-fsa/sherpa-onnx",
-      "generatedNotices": [
-        {
-          "licenseId": "Apache-2.0",
-          "copyrights": ["Copyright (c) 2022-2025 Xiaomi Corporation"]
-        },
-        {
-          "licenseId": "MIT",
-          "preamble": [
-            "This package includes ONNX Runtime: https://github.com/microsoft/onnxruntime"
-          ],
-          "copyrights": ["Copyright (c) Microsoft Corporation"]
-        }
-      ]
-    },
-    {
-      "name": "sherpa-onnx-darwin-x64",
-      "license": "Apache-2.0 AND MIT",
-      "sourceUrl": "https://github.com/k2-fsa/sherpa-onnx",
-      "generatedNotices": [
-        {
-          "licenseId": "Apache-2.0",
-          "copyrights": ["Copyright (c) 2022-2025 Xiaomi Corporation"]
-        },
-        {
-          "licenseId": "MIT",
-          "preamble": [
-            "This package includes ONNX Runtime: https://github.com/microsoft/onnxruntime"
-          ],
-          "copyrights": ["Copyright (c) Microsoft Corporation"]
-        }
-      ]
-    },
-    {
-      "name": "sherpa-onnx-darwin-arm64",
-      "license": "Apache-2.0 AND MIT",
-      "sourceUrl": "https://github.com/k2-fsa/sherpa-onnx",
-      "generatedNotices": [
-        {
-          "licenseId": "Apache-2.0",
-          "copyrights": ["Copyright (c) 2022-2025 Xiaomi Corporation"]
-        },
-        {
-          "licenseId": "MIT",
-          "preamble": [
-            "This package includes ONNX Runtime: https://github.com/microsoft/onnxruntime"
-          ],
-          "copyrights": ["Copyright (c) Microsoft Corporation"]
-        }
-      ]
     }
   ]
 }

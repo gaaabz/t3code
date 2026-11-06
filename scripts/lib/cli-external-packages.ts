@@ -9,9 +9,11 @@ const CLI_RUNTIME_EXTERNAL_PREFIXES = [
   "ffi-rs",
   "@yuuang/",
   "@ff-labs/",
+  "transcribe-cpp",
+  "@transcribe-cpp/",
+  "koffi",
+  "@koromix/",
   "@napi-rs/keyring",
-  // Loads its addon and ONNX Runtime libraries from per-platform packages.
-  "sherpa-onnx-",
   "@clerk/electron-passkeys",
   "node-gyp-build",
   "node-addon-api",
