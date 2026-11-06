@@ -47,7 +47,7 @@ export function ThreadTasksPanel({
                 role="img"
                 aria-label={STEP_STATUS_LABEL[step.status]}
                 className={cn(
-                  "mt-px size-4 shrink-0",
+                  "mt-px size-3.5 shrink-0",
                   step.status === "completed"
                     ? "text-success"
                     : step.status === "running"
@@ -57,7 +57,7 @@ export function ThreadTasksPanel({
               />
               <span
                 className={cn(
-                  "min-w-0 flex-1 text-sm leading-4.5 break-words",
+                  "min-w-0 flex-1 text-xs leading-4 break-words",
                   step.status === "completed"
                     ? "text-muted-foreground line-through"
                     : step.status === "running"
