@@ -3304,8 +3304,6 @@ export default function ChatView(props: ChatViewProps) {
     onToggleTerminal: toggleTerminalVisibilityStable,
     onToggleThreadPanel: toggleThreadPanelStable,
     onToggleRightPanel: toggleRightPanelStable,
-    // With the inline panel open the fixed controls overlay its narrow tab bar, so the chat header shows usage.
-    usageStrip: inlineRightPanelOwnsTitleBar ? null : usageStrip,
   } satisfies PanelLayoutControlsProps;
   const panelToggleControls = (
     <PanelLayoutControls
@@ -3394,8 +3392,14 @@ export default function ChatView(props: ChatViewProps) {
                 : {})}
               {...(threadFindEnabled ? { onFindInThread: openThreadFindStable } : {})}
             />
-            {inlineRightPanelOwnsTitleBar && usageStrip ? (
-              <div className="-ml-8 mr-8 hidden h-full shrink-0 [-webkit-app-region:no-drag] @[520px]/chat-header:flex">
+            {usageStrip ? (
+              // Pulled into ChatHeader's end padding; the margin keeps clear of the fixed panel toggles.
+              <div
+                className={cn(
+                  "hidden h-full shrink-0 [-webkit-app-region:no-drag] @[520px]/chat-header:flex",
+                  inlineRightPanelOwnsTitleBar ? "-ml-8 mr-8" : "-ml-22 mr-24",
+                )}
+              >
                 {usageStrip}
               </div>
             ) : null}
