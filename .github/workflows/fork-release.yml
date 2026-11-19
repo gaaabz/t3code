@@ -4,8 +4,6 @@ name: Fork release
 # Windows installer whose updater follows this fork's releases.
 
 on:
-  schedule:
-    - cron: "17 6 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -14,6 +12,7 @@ concurrency:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   release:
@@ -43,13 +42,21 @@ jobs:
           git push origin HEAD:main
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           # Forks inherit upstream tags, so only a tag with a release here means HEAD already shipped.
-          if [[ "$GITHUB_EVENT_NAME" == "schedule" ]]; then
-            for tag in $(git tag --points-at HEAD --list 'v*-nightly.*'); do
-              if gh release view "$tag" > /dev/null 2>&1; then
-                echo "skip=true" >> "$GITHUB_OUTPUT"
-              fi
+          for tag in $(git tag --points-at HEAD --list 'v*-nightly.*'); do
+            if gh release view "$tag" > /dev/null 2>&1; then
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+            fi
+          done
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      # Upstream workflows arrive enabled on every merge; only this one should run in the fork.
+      - name: Disable upstream workflows
+        run: |
+          gh workflow list --all --json name,state --jq '.[] | select(.state == "active") | .name' |
+            while read -r name; do
+              [[ "$name" == "$GITHUB_WORKFLOW" ]] || gh workflow disable "$name"
             done
-          fi
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -62,6 +69,11 @@ jobs:
 
       - uses: ./.github/actions/setup-ci-deps
         if: steps.sync.outputs.skip != 'true'
+
+      - uses: Swatinem/rust-cache@v2
+        if: steps.sync.outputs.skip != 'true'
+        with:
+          workspaces: native/resource-monitor
 
       - name: Align package versions
         if: steps.sync.outputs.skip != 'true'
