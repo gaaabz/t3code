@@ -97,6 +97,8 @@ five minutes. Text is inserted at the cursor or replaces the selection you had
 when recording started, and the editor is read-only while dictation runs.
 Changes that reach the draft meanwhile, such as a cited message, are kept;
 the text then goes after your selection instead of replacing it.
+A file or thread you paste or drop in meanwhile can be removed by focusing its
+chip and pressing Backspace or Delete.
 
 While typing in the composer, you can also hold **Space** to record and release it
 to transcribe; a quick tap still types a space.
