@@ -5,7 +5,8 @@ import type {
   ServerProviderUsageWindow,
   UsageLimitSourceSnapshots,
 } from "@t3tools/contracts";
-import { collectProviderUsageLimits, limitsNotice } from "@t3tools/shared/usageLimits";
+import { collectProviderUsageLimits } from "@t3tools/shared/usageLimits";
+import { limitsNotice } from "@t3tools/shared/usageLimitsCopy";
 
 export type UsageTone = "ok" | "warning" | "critical";
 

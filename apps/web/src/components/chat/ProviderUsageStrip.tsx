@@ -4,7 +4,8 @@ import type {
   UsageLimitSourceSnapshots,
 } from "@t3tools/contracts";
 import { resolveProviderInstanceDisplayName } from "@t3tools/client-runtime/state/provider-instance-display";
-import { formatDuration } from "@t3tools/shared/usageLimits";
+import { formatDuration } from "@t3tools/shared/usageLimitsCopy";
+import { useGT, useMessages } from "gt-react";
 import { memo } from "react";
 
 import { useNowMinute } from "../../hooks/useNowMinute";
@@ -96,6 +97,8 @@ function ProviderUsageGroupView({
   readonly group: ProviderUsageGroup;
   readonly now: number;
 }) {
+  const gt = useGT();
+  const m = useMessages();
   const displayName = resolveProviderInstanceDisplayName(group.provider);
   return (
     <Tooltip>
@@ -126,8 +129,13 @@ function ProviderUsageGroupView({
             const resetsAt = metric.resetsAt ? Date.parse(metric.resetsAt) : Number.NaN;
             return (
               <span key={metric.key} className="text-muted-foreground">
-                {METRIC_LABEL[metric.key]}: {Math.round(metric.usedPercent)}% used
-                {resetsAt > now ? ` · resets in ${formatDuration(resetsAt - now)}` : ""}
+                {gt("{label}: {percent}% used", {
+                  label: METRIC_LABEL[metric.key],
+                  percent: Math.round(metric.usedPercent),
+                })}
+                {resetsAt > now
+                  ? gt(" · resets in {duration}", { duration: formatDuration(resetsAt - now, m) })
+                  : ""}
               </span>
             );
           })}
