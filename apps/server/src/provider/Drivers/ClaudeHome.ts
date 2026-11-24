@@ -74,9 +74,6 @@ export const mergeClaudeProcessEnvironment = Effect.fn("mergeClaudeProcessEnviro
   const baseEnvironment: NodeJS.ProcessEnv = {
     ...hostEnvironment,
     CLAUDE_CODE_ENTRYPOINT: "t3-code",
-    // This fork keeps Claude Code's usage metrics and error reports on the device.
-    DISABLE_TELEMETRY: "1",
-    DISABLE_ERROR_REPORTING: "1",
   };
   for (const name of CLAUDE_HOST_SESSION_VARIABLES) delete baseEnvironment[name];
   // The desktop runs the server as Node through Electron. Commands Claude runs inherit its env, so
