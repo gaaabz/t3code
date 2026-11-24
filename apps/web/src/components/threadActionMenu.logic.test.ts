@@ -13,6 +13,7 @@ const baseState: ThreadActionMenuState = {
   canSnoozeNow: true,
   isRegeneratingTitle: false,
   isRunning: false,
+  hasCompletedRun: true,
   supports: {
     settlement: true,
     autoSettleOptOut: true,
@@ -84,6 +85,14 @@ describe("buildThreadActionMenuItems", () => {
     expect(ids).toContain(id);
     expect(ids).not.toContain(isInGrid ? "add-to-grid" : "remove-from-grid");
     expect(items.find((item) => item.id === id)?.disabled).toBeFalsy();
+  });
+
+  it.each([
+    ["while the thread is running", { isRunning: true }],
+    ["before any run has completed", { hasCompletedRun: false }],
+  ])("omits mark unread %s", (_, overrides) => {
+    const items = buildThreadActionMenuItems({ ...baseState, ...overrides });
+    expect(items.map((item) => item.id)).not.toContain("mark-unread");
   });
 
   it("disables only rename where no inline title editor exists", () => {
