@@ -1,6 +1,8 @@
 import Constants from "expo-constants";
 import { Observe } from "expo-observe";
 
+import { setDiagnosticsSending } from "./diagnosticsSetting";
+
 // Importing expo-observe installs its global JS error handler; this fork never sends its reports.
 const appVariant: unknown = Constants.expoConfig?.extra?.appVariant;
 
@@ -29,6 +31,7 @@ let latestConfiguration = 0;
 // Best effort: Observe skips the pass while it is backing off from a failed send.
 export async function setCrashReportsEnabled(enabled: boolean) {
   const configuration = ++latestConfiguration;
+  setDiagnosticsSending(enabled);
   const dispatchingEnabled = crashReportingAvailable && enabled;
   if (dispatchingEnabled) {
     await Observe.dispatchEvents();
