@@ -43,7 +43,7 @@ jobs:
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           # Forks inherit upstream tags, so only a tag with a release here means HEAD already shipped.
           for tag in $(git tag --points-at HEAD --list 'v*-nightly.*'); do
-            if gh release view "$tag" > /dev/null 2>&1; then
+            if gh release view --repo "$GITHUB_REPOSITORY" "$tag" > /dev/null 2>&1; then
               echo "skip=true" >> "$GITHUB_OUTPUT"
             fi
           done
@@ -51,11 +51,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
       # Upstream workflows arrive enabled on every merge; only this one should run in the fork.
+      # The upstream remote added above would otherwise become gh's default repository.
       - name: Disable upstream workflows
         run: |
-          gh workflow list --all --json name,state --jq '.[] | select(.state == "active") | .name' |
+          gh workflow list --repo "$GITHUB_REPOSITORY" --all --json name,state --jq '.[] | select(.state == "active") | .name' |
             while read -r name; do
-              [[ "$name" == "$GITHUB_WORKFLOW" ]] || gh workflow disable "$name"
+              [[ "$name" == "$GITHUB_WORKFLOW" ]] || gh workflow disable --repo "$GITHUB_REPOSITORY" "$name"
             done
         env:
           GH_TOKEN: ${{ github.token }}
