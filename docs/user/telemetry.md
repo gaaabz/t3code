@@ -1,5 +1,11 @@
 # Product usage data
 
+> **This fork sends nothing.** Product events are off unless you set both
+> `T3CODE_TELEMETRY_ENABLED=true` and `T3CODE_POSTHOG_KEY`; relay tracing is off unless
+> `T3CODE_TELEMETRY_ENABLED=true`; the browser app never sends relay traces; the mobile app never
+> sends crash reports or traces. Token usage is still counted locally. The rest of this page
+> describes upstream T3 Code.
+
 The T3 Code server sends product usage events to T3 Code's own endpoint at `ingest.t3.codes`,
 associated with a hashed account or installation identifier. To count how many installations one person
 uses, the server also sends hashed account identifiers: your T3 Connect account, your OpenAI and

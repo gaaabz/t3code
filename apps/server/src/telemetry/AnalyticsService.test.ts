@@ -113,20 +113,22 @@ const recordTwentyEvents = Effect.gen(function* () {
   }
 });
 
-const analyticsLayerWith = (client: HttpClient.HttpClient, policy?: ManagedPolicyDocument) =>
+const defaultTestEnv: Record<string, unknown> = {
+  T3CODE_TELEMETRY_ENABLED: true,
+  T3CODE_POSTHOG_KEY: "phc_test_key",
+  T3CODE_POSTHOG_HOST: "http://localhost",
+};
+
+const analyticsLayerWith = (
+  client: HttpClient.HttpClient,
+  policy?: ManagedPolicyDocument,
+  env: Record<string, unknown> = defaultTestEnv,
+) =>
   AnalyticsService.layer.pipe(
     Layer.provideMerge(
       ServerConfig.ServerConfig.layerTest(process.cwd(), { prefix: "t3-telemetry-retry-" }),
     ),
-    Layer.provide(
-      ConfigProvider.layer(
-        ConfigProvider.fromUnknown({
-          T3CODE_TELEMETRY_ENABLED: true,
-          T3CODE_POSTHOG_KEY: "phc_test_key",
-          T3CODE_POSTHOG_HOST: "http://localhost",
-        }),
-      ),
-    ),
+    Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(env))),
     Layer.provide(
       Layer.mergeAll(
         Layer.succeed(HostProcess.Platform, "win32"),
@@ -151,6 +153,7 @@ const sendFor = (
     AnalyticsService.AnalyticsService | Effect.Services<typeof getTelemetryIdentity>
   > = recordTwentyEvents,
   policy?: ManagedPolicyDocument,
+  env?: Record<string, unknown>,
 ) =>
   Effect.gen(function* () {
     const batches: Array<ReadonlyArray<SentEvent>> = [];
@@ -165,7 +168,7 @@ const sendFor = (
         return yield* respond(request);
       }),
     );
-    const runtimeLayer = analyticsLayerWith(client, policy);
+    const runtimeLayer = analyticsLayerWith(client, policy, env);
 
     yield* Effect.gen(function* () {
       yield* record;
@@ -268,6 +271,15 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("AnalyticsService
         });
         assert.deepEqual(denied, []);
       }),
+  );
+
+  it.effect("sends nothing unless telemetry is explicitly enabled", () =>
+    Effect.gen(function* () {
+      const batches = yield* sendFor(1, respondWithStatus(204), recordTwentyEvents, undefined, {
+        T3CODE_POSTHOG_HOST: "http://localhost",
+      });
+      assert.deepEqual(batches, []);
+    }),
   );
 
   it.effect("drops a batch the endpoint rejects without sending it again", () =>
