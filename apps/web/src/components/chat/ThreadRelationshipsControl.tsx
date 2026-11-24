@@ -79,6 +79,7 @@ import {
   applyProviderInstanceSettings,
   deriveProviderInstanceEntries,
   hasInstanceBadge,
+  type ProviderInstanceEntry,
 } from "../../providerInstances";
 import { threadEnvironment } from "../../state/threads";
 import { orchestrationEnvironment, threadTitlesRead } from "../../state/orchestration";
@@ -87,6 +88,7 @@ import { useEnvironmentQuery } from "../../state/query";
 import { AgentElapsed } from "./AgentElapsed";
 import { ThreadRelationshipIcon, threadRelationshipStatusLabel } from "./ThreadRelationshipIcon";
 import { ThreadLineageWorkflowRow } from "./ThreadLineageWorkflowRow";
+import { selectNativeSubagentRows } from "./ThreadRelationshipsControl.logic";
 import { useSideThreadTrigger } from "../../hooks/useSideThreadTrigger";
 import { openSideThread, resolveThreadOpenRoute } from "../../lib/sideChatPane";
 
@@ -99,6 +101,7 @@ import {
   THREAD_DETAILS_PANEL_CHEVRON_CLASS,
   THREAD_DETAILS_PANEL_ICON_CLASS,
   THREAD_DETAILS_PANEL_LABEL_CLASS,
+  THREAD_DETAILS_PANEL_ROW_CLASS,
   THREAD_DETAILS_PANEL_SPLIT_GROUP_CLASS,
   THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS,
   THREAD_DETAILS_PANEL_SPLIT_SEPARATOR_CLASS,
@@ -159,11 +162,48 @@ type RemoteSubagent = OrchestrationV2Subagent & {
   readonly remoteChild: OrchestrationV2RemoteTaskChild;
 };
 
+/** A projected subagent joined with the runtime view its row renders from. */
+type LineageSubagent = RuntimeSubagent & {
+  readonly id: OrchestrationV2Subagent["id"];
+  readonly threadId: OrchestrationV2Subagent["threadId"];
+  readonly runId: OrchestrationV2Subagent["runId"];
+  readonly nativeTaskRef: OrchestrationV2Subagent["nativeTaskRef"];
+  readonly nativeStatus: OrchestrationV2Subagent["status"];
+  readonly driver: OrchestrationV2Subagent["driver"];
+  readonly providerInstanceId: OrchestrationV2Subagent["providerInstanceId"];
+  readonly origin: OrchestrationV2Subagent["origin"];
+  readonly modelSelection: OrchestrationV2Subagent["modelSelection"];
+};
+
+function toLineageSubagent(
+  subagent: OrchestrationV2Subagent,
+  runtimeById: ReadonlyMap<string, RuntimeSubagent>,
+): LineageSubagent | undefined {
+  const agent = runtimeById.get(subagent.id);
+  if (agent === undefined) return undefined;
+  return {
+    ...agent,
+    id: subagent.id,
+    threadId: subagent.threadId,
+    runId: subagent.runId,
+    nativeTaskRef: subagent.nativeTaskRef,
+    nativeStatus: subagent.status,
+    driver: subagent.driver,
+    providerInstanceId: subagent.providerInstanceId,
+    origin: subagent.origin,
+    modelSelection: subagent.modelSelection,
+  };
+}
+
 /** A task delegated to a linked environment has no thread here, so it gets its own row kind. */
-type LineageRow = ThreadRelationshipWalkRow | { readonly remote: RemoteSubagent };
+type LineageRow =
+  | ThreadRelationshipWalkRow
+  | { readonly remote: RemoteSubagent }
+  // A provider-native subagent with no thread here: a row, but not a link.
+  | { readonly native: LineageSubagent };
 
 const lineageRowStatus = (row: LineageRow) =>
-  "remote" in row ? row.remote.status : row.edge.status;
+  "native" in row ? row.native.status : "remote" in row ? row.remote.status : row.edge.status;
 
 const isFinishedAgentStatus = (status: string | null | undefined) =>
   ["completed", "failed", "error", "cancelled", "interrupted", "idle"].includes(status ?? "");
@@ -367,6 +407,83 @@ function RemoteSubagentRow(props: {
 }
 
 /**
+ * A provider-native subagent running without a thread of its own: it cannot be opened,
+ * so the row carries only what the provider reported.
+ */
+function NativeSubagentRow(props: {
+  readonly agent: LineageSubagent;
+  readonly provider: ServerProvider | undefined;
+  readonly providers: ReadonlyArray<ServerProvider> | undefined;
+  readonly providerEntries: ReadonlyArray<ProviderInstanceEntry>;
+  readonly anyInstanceBadge: boolean;
+}) {
+  const m = useMessages();
+  const { agent } = props;
+  const title = relationshipThreadTitle({ title: agent.title, isSubagent: true });
+  const failed = agent.status === "failed";
+  const statusLabel = threadRelationshipStatusLabel(agent.status, m);
+  return (
+    <li className="group relative flex h-8 items-center rounded-lg">
+      <Tooltip>
+        <TooltipTrigger
+          delay={200}
+          render={
+            <div
+              aria-description={statusLabel}
+              className={cn(
+                "flex items-center border border-transparent",
+                THREAD_DETAILS_PANEL_ROW_CLASS,
+              )}
+            />
+          }
+        >
+          <ThreadRelationshipIcon
+            driver={agent.driver}
+            provider={props.provider}
+            providerEntries={props.providerEntries}
+            anyInstanceBadge={props.anyInstanceBadge}
+            fallbackIcon={BotIcon}
+            status={agent.status}
+          />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-left text-sm font-medium leading-4 text-foreground/85">
+              {title}
+            </span>
+          </span>
+          {failed || deriveSubagentElapsedMs(agent, 0) === null ? (
+            <span
+              className={`shrink-0 text-2xs ${failed ? "text-destructive" : "text-muted-foreground"}`}
+            >
+              {statusLabel}
+            </span>
+          ) : (
+            <span className="shrink-0 text-2xs font-normal tabular-nums text-muted-foreground">
+              <AgentElapsed agent={agent} compact />
+            </span>
+          )}
+        </TooltipTrigger>
+        <ThreadHoverCardPopup side="left">
+          <SubagentTooltipContent
+            title={title}
+            model={agent.model}
+            providerInstanceId={agent.providerInstanceId}
+            origin={agent.origin}
+            modelSelection={agent.modelSelection}
+            provider={props.provider}
+            providers={props.providers}
+            driver={agent.driver}
+            elapsed={<AgentElapsed agent={agent} />}
+            status={agent.status}
+            result={agent.result}
+            progress={agent.progress}
+          />
+        </ThreadHoverCardPopup>
+      </Tooltip>
+    </li>
+  );
+}
+
+/**
  * The thread on a linked environment whose agent delegated this one. It opens
  * there when this client is connected to that environment.
  */
@@ -539,24 +656,16 @@ export function ThreadRelationshipsPanel(props: {
   const runtimeSubagents = projectedSubagentsToRuntime(projected);
   const byId = new Map(runtimeSubagents.map((agent) => [agent.id, agent]));
   const subagentsByThreadId = new Map(
-    projected
-      .filter((subagent) => subagent.childThreadId !== null)
-      .map((subagent) => [
-        subagent.childThreadId,
-        {
-          ...byId.get(subagent.id)!,
-          id: subagent.id,
-          threadId: subagent.threadId,
-          runId: subagent.runId,
-          nativeTaskRef: subagent.nativeTaskRef,
-          nativeStatus: subagent.status,
-          driver: subagent.driver,
-          providerInstanceId: subagent.providerInstanceId,
-          origin: subagent.origin,
-          modelSelection: subagent.modelSelection,
-        },
-      ]),
+    projected.flatMap((subagent) => {
+      const childThreadId = subagent.childThreadId;
+      const agent = toLineageSubagent(subagent, byId);
+      return childThreadId === null || agent === undefined ? [] : [[childThreadId, agent] as const];
+    }),
   );
+  const nativeSubagents = selectNativeSubagentRows(projected).flatMap((subagent) => {
+    const agent = toLineageSubagent(subagent, byId);
+    return agent === undefined ? [] : [agent];
+  });
   const workflowGroupsById = new Map(
     deriveWorkflowGroups(runtimeSubagents, m).map((group) => [group.workflow.id, group]),
   );
@@ -640,6 +749,10 @@ export function ThreadRelationshipsPanel(props: {
       .map((remote) => ({ remote })),
     ({ remote }) => (isFinishedAgentStatus(remote.status) ? "remotePrevious" : "remoteActive"),
   );
+  const { nativeActive = [], nativePrevious = [] } = groupBy(
+    nativeSubagents.map((native) => ({ native })),
+    ({ native }) => (isFinishedAgentStatus(native.status) ? "nativePrevious" : "nativeActive"),
+  );
   const groups: ReadonlyArray<{
     id: string;
     label: string | null;
@@ -647,11 +760,16 @@ export function ThreadRelationshipsPanel(props: {
     expanded: boolean;
   }> = [
     { id: "related", label: null, rows: related, expanded: true },
-    { id: "active", label: null, rows: [...active, ...remoteActive], expanded: true },
+    {
+      id: "active",
+      label: null,
+      rows: [...active, ...remoteActive, ...nativeActive],
+      expanded: true,
+    },
     {
       id: "previous",
       label: gt("Previous agents"),
-      rows: [...previous, ...remotePrevious],
+      rows: [...previous, ...remotePrevious, ...nativePrevious],
       expanded: false,
     },
   ];
@@ -671,6 +789,8 @@ export function ThreadRelationshipsPanel(props: {
       runningCount > 0 ||
       remoteActive.length > 0 ||
       remotePrevious.length > 0 ||
+      nativeActive.length > 0 ||
+      nativePrevious.length > 0 ||
       delegatedFrom !== undefined ||
       // Disconnect lives in this heading, so a thread with only side chats still shows it.
       (canDetach && sideChats.length > 0));
@@ -1103,7 +1223,18 @@ export function ThreadRelationshipsPanel(props: {
             <ThreadLineageGroup key={`${scopedThreadKey(ref)}:${group.id}`} {...group}>
               {(visibleRows) =>
                 visibleRows.map((row) =>
-                  "remote" in row ? (
+                  "native" in row ? (
+                    <NativeSubagentRow
+                      key={row.native.id}
+                      agent={row.native}
+                      provider={providers?.find(
+                        (entry) => entry.instanceId === row.native.providerInstanceId,
+                      )}
+                      providers={providers}
+                      providerEntries={providerEntries}
+                      anyInstanceBadge={hasInstanceBadge(providerEntries)}
+                    />
+                  ) : "remote" in row ? (
                     <RemoteSubagentRow
                       key={row.remote.id}
                       agent={row.remote}

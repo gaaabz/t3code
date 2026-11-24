@@ -100,6 +100,10 @@ const PI_INHERIT_MODEL_SLUG = "default";
 const STREAM_FLUSH_MS = 50;
 const PI_REQUEST_TIMEOUT_MS = 15_000;
 const PI_SUBAGENT_ASYNC_PREFIX = "PI_SUBAGENT_ASYNC_JSON:";
+const PI_GENTLE_AGENTS_WIDGET = "gentle-agents";
+// gentle-pi publishes one JSON line per widget snapshot; every line carries this schema.
+const PI_GENTLE_AGENTS_SCHEMA = "gentle-agents.activity/v1";
+const PI_GENTLE_AGENTS_RESULT = "gentle-agents.result";
 const decodePiJson = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Unknown));
 const PI_SESSION_TIMEOUT_MS = 60_000;
 // Reload restarts every extension; with a typical set it takes about 20s.
@@ -652,6 +656,10 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
       >();
       // The launch snapshot arrives before the tool result that names its run.
       let latestAsyncSnapshotRuns: ReadonlyArray<unknown> = [];
+      // gentle-pi background tasks report only through the widget, so tool results and widget
+      // updates share one record per task id.
+      const piGentleAgentTasks = new Map<string, PiGentleAgentTask>();
+      const piGentleBackgroundTurns = new Set<OrchestrationV2ProviderTurn["id"]>();
       // Pi can settle immediately after dialog response; serialize so terminal cannot overtake request resolution.
       const sessionEventPermit = yield* Semaphore.make(1);
       let threadState: PiThreadState | null = null;
@@ -1505,6 +1513,8 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
         });
         if (toolName === "subagent") {
           yield* emitSubagentTasks(turn, toolCallId, resultRecord, completed);
+        } else if (toolName === "subagent_run") {
+          yield* emitGentleAgentTask(turn, toolCallId, args, resultRecord, completed);
         }
       });
 
@@ -1638,6 +1648,121 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
         });
       });
 
+      const updateGentleBackgroundWork = Effect.fnUntraced(function* (
+        providerTurnId: OrchestrationV2ProviderTurn["id"],
+        pending: boolean,
+      ) {
+        if (piGentleBackgroundTurns.has(providerTurnId) === pending) return;
+        if (pending) piGentleBackgroundTurns.add(providerTurnId);
+        else piGentleBackgroundTurns.delete(providerTurnId);
+        yield* emit({
+          type: "background_work.updated",
+          driver: PI_PROVIDER,
+          providerTurnId,
+          pending,
+        });
+      });
+
+      const settleGentleBackgroundWork = Effect.fnUntraced(function* (
+        providerTurnId: OrchestrationV2ProviderTurn["id"],
+      ) {
+        if (!piGentleBackgroundTurns.has(providerTurnId)) return;
+        for (const tracked of piGentleAgentTasks.values()) {
+          if (tracked.turn.providerTurn.id !== providerTurnId) continue;
+          if (isActiveSubagentStatus(tracked.status)) return;
+        }
+        for (const run of piAsyncRuns.values()) {
+          if (run.turn.providerTurn.id === providerTurnId) return;
+        }
+        yield* updateGentleBackgroundWork(providerTurnId, false);
+      });
+
+      const emitGentleAgentSubagent = Effect.fnUntraced(function* (
+        tracked: PiGentleAgentTask,
+        status: OrchestrationV2Subagent["status"],
+        progress: string | undefined,
+        result: string | null,
+      ) {
+        tracked.status = status;
+        const key = `${status}:${progress ?? ""}:${result ?? ""}`;
+        if (tracked.key === key) return;
+        tracked.key = key;
+        if (result !== null) tracked.result = result;
+        yield* emitSubagent(tracked.turn, tracked.toolCallId, tracked.taskId, {
+          ...tracked.description,
+          status,
+          progress: isActiveSubagentStatus(status) ? progress : undefined,
+          result: tracked.result,
+        });
+      });
+
+      const emitGentleAgentTask = Effect.fnUntraced(function* (
+        turn: ActivePiTurn,
+        toolCallId: string,
+        args: unknown,
+        resultRecord: unknown,
+        completed: boolean,
+      ) {
+        const details = recordField(recordField(resultRecord, "details"), "gentleAgents");
+        const taskId = recordString(details, "taskId");
+        if (taskId === undefined) return;
+        const status =
+          piGentleAgentStatus(recordString(details, "status")) ??
+          (completed ? "completed" : "running");
+        const tracked: PiGentleAgentTask = piGentleAgentTasks.get(taskId) ?? {
+          turn,
+          toolCallId,
+          taskId,
+          description: {
+            agent:
+              recordString(args, "label") ??
+              recordString(details, "label") ??
+              recordString(details, "agent") ??
+              "subagent",
+            task: recordString(args, "task") ?? "",
+            model: recordString(details, "model") ?? null,
+          },
+          background: recordString(details, "mode") === "background",
+          status,
+          key: "",
+          result: null,
+        };
+        piGentleAgentTasks.set(taskId, tracked);
+        // A task-mode run returns its report in the tool result; a background one reports later.
+        const report =
+          completed && recordString(details, "mode") === "task"
+            ? contentText(recordField(resultRecord, "content"))
+            : "";
+        yield* emitGentleAgentSubagent(
+          tracked,
+          status,
+          recordString(details, "lastStep"),
+          report.length === 0 ? null : report.slice(0, 10_000),
+        );
+      });
+
+      // A background task's end can also arrive as gentle-pi's result steer message.
+      const emitGentleAgentResult = Effect.fnUntraced(function* (message: unknown) {
+        if (recordString(message, "role") !== "custom") return false;
+        if (recordString(message, "customType") !== PI_GENTLE_AGENTS_RESULT) return false;
+        const details = recordField(recordField(message, "details"), "gentleAgents");
+        const taskId = recordString(details, "taskId");
+        const tracked = taskId === undefined ? undefined : piGentleAgentTasks.get(taskId);
+        if (tracked === undefined) return false;
+        const status = piGentleAgentStatus(recordString(details, "status")) ?? "completed";
+        const text = contentText(recordField(message, "content"));
+        yield* emitGentleAgentSubagent(
+          tracked,
+          status,
+          recordString(details, "lastStep"),
+          text.length === 0 ? null : text.slice(0, 10_000),
+        );
+        if (tracked.background && !isActiveSubagentStatus(status)) {
+          yield* settleGentleBackgroundWork(tracked.turn.providerTurn.id);
+        }
+        return true;
+      });
+
       const updateAsyncRun = Effect.fnUntraced(function* (
         runId: string,
         tracked: {
@@ -1677,6 +1802,10 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
         for (const other of piAsyncRuns.values()) {
           if (other.turn.providerTurn.id === providerTurnId) return;
         }
+        for (const gentle of piGentleAgentTasks.values()) {
+          if (gentle.turn.providerTurn.id !== providerTurnId) continue;
+          if (isActiveSubagentStatus(gentle.status)) return;
+        }
         yield* emit({
           type: "background_work.updated",
           driver: PI_PROVIDER,
@@ -1701,6 +1830,43 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
             const tracked = runId === undefined ? undefined : piAsyncRuns.get(runId);
             if (runId === undefined || tracked === undefined) continue;
             yield* updateAsyncRun(runId, tracked, run);
+          }
+        }
+      });
+
+      const updateGentleAgents = Effect.fnUntraced(function* (event: PiRpcRecord) {
+        const lines = recordField(event, "widgetLines");
+        if (!Array.isArray(lines)) return;
+        for (const line of lines) {
+          if (typeof line !== "string") continue;
+          const snapshot = Option.getOrUndefined(decodePiJson(line));
+          if (recordString(snapshot, "schema") !== PI_GENTLE_AGENTS_SCHEMA) continue;
+          const tasks = recordField(snapshot, "tasks");
+          if (!Array.isArray(tasks)) continue;
+          const activeTurns = new Set<OrchestrationV2ProviderTurn["id"]>();
+          for (const task of tasks) {
+            const summary = recordField(task, "summary");
+            const taskId = recordString(summary, "id");
+            const tracked = taskId === undefined ? undefined : piGentleAgentTasks.get(taskId);
+            const status = piGentleAgentStatus(recordString(summary, "status"));
+            if (tracked === undefined || status === undefined) continue;
+            yield* emitGentleAgentSubagent(
+              tracked,
+              status,
+              recordString(summary, "lastStep"),
+              null,
+            );
+            if (tracked.background && isActiveSubagentStatus(status)) {
+              activeTurns.add(tracked.turn.providerTurn.id);
+            }
+          }
+          for (const providerTurnId of activeTurns) {
+            yield* updateGentleBackgroundWork(providerTurnId, true);
+          }
+          // A snapshot that drops a task is not its end, but it must stop holding the thread.
+          for (const providerTurnId of piGentleBackgroundTurns) {
+            if (activeTurns.has(providerTurnId)) continue;
+            yield* updateGentleBackgroundWork(providerTurnId, false);
           }
         }
       });
@@ -1829,9 +1995,16 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
           );
           return;
         }
-        if (method === "setWidget" && recordString(event, "widgetKey") === "subagent-async") {
-          yield* updateAsyncSubagents(event);
-          return;
+        if (method === "setWidget") {
+          const widgetKey = recordString(event, "widgetKey");
+          if (widgetKey === "subagent-async") {
+            yield* updateAsyncSubagents(event);
+            return;
+          }
+          if (widgetKey === PI_GENTLE_AGENTS_WIDGET) {
+            yield* updateGentleAgents(event);
+            return;
+          }
         }
         if (
           method !== "select" &&
@@ -2337,6 +2510,7 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
             return;
           }
           case "message_start": {
+            if (yield* emitGentleAgentResult(event["message"])) return;
             const role = recordString(event["message"], "role");
             if (turn !== null && role === "assistant") {
               turn.sawAgentActivity = true;
@@ -2393,6 +2567,7 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
             return;
           }
           case "message_end": {
+            if (yield* emitGentleAgentResult(event["message"])) return;
             if (turn === null) return;
             const message = event["message"];
             if (recordString(message, "role") !== "assistant") return;
@@ -4373,6 +4548,47 @@ function piAsyncSubagentStatus(
     default:
       return undefined;
   }
+}
+
+interface PiGentleAgentTask {
+  readonly turn: ActivePiTurn;
+  readonly toolCallId: string;
+  readonly taskId: string;
+  readonly description: {
+    readonly agent: string;
+    readonly task: string;
+    readonly model: string | null;
+  };
+  readonly background: boolean;
+  status: OrchestrationV2Subagent["status"];
+  key: string;
+  result: string | null;
+}
+
+function piGentleAgentStatus(
+  status: string | undefined,
+): OrchestrationV2Subagent["status"] | undefined {
+  switch (status) {
+    case "queued":
+      return "pending";
+    case "running":
+      return "running";
+    case "waiting":
+      return "waiting";
+    case "completed":
+      return "completed";
+    case "failed":
+    case "timed_out":
+      return "failed";
+    case "cancelled":
+      return "cancelled";
+    default:
+      return undefined;
+  }
+}
+
+function isActiveSubagentStatus(status: OrchestrationV2Subagent["status"]): boolean {
+  return status === "pending" || status === "running" || status === "waiting";
 }
 
 function piSubagentOutput(result: unknown): string {
