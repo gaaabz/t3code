@@ -65,8 +65,9 @@ jobs:
         if: steps.sync.outputs.skip != 'true'
         id: version
         run: |
-          base=$(node -p 'require("./apps/desktop/package.json").version')
-          echo "version=${base%%-*}-nightly.$(date -u +%Y%m%d).${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          # Nightlies are previews of the next upstream patch, so they sort above the current release.
+          next=$(node -p 'const [a, b, c] = require("./apps/desktop/package.json").version.split("-")[0].split("."); `${a}.${b}.${Number(c) + 1}`')
+          echo "version=${next}-nightly.$(date -u +%Y%m%d).${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
 
       - uses: ./.github/actions/setup-ci-deps
         if: steps.sync.outputs.skip != 'true'
