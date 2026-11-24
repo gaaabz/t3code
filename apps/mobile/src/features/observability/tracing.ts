@@ -22,9 +22,12 @@ const RELEASE_CHANNEL_BY_VARIANT: Readonly<Record<string, ReleaseChannel | undef
   production: "stable",
 };
 
+// Relay traces never leave the device in this fork.
+const relayTracingAllowed: boolean = false;
+
 export function resolveTracingConfig(): TracingConfig | null {
   const config = resolveCloudPublicConfig();
-  if (!hasTracingPublicConfig(config)) {
+  if (!relayTracingAllowed || !hasTracingPublicConfig(config)) {
     return null;
   }
   const { tracesUrl, tracesDataset, tracesToken } = config.observability;
