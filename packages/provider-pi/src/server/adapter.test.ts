@@ -2188,6 +2188,7 @@ describe("PiAdapterV2", () => {
       assert.equal(spawn.env.T3_MCP_BEARER_TOKEN, "secret-pi-token");
       assert.equal(spawn.env.T3_PI_RUNTIME_MODE, "full-access");
       assert.equal(spawn.env.T3CODE_THREAD_ID, THREAD_ID);
+      assert.isUndefined(spawn.env.GENTLE_SHELL_INTERACTIVE_HOST);
     }).pipe(Effect.scoped, Effect.provide(layerTest)),
   );
 
@@ -3910,6 +3911,272 @@ describe("PiAdapterV2", () => {
         statuses: ["completed", "failed"],
         pending: [false],
       });
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect("shows a gentle-agents subagent_run task as a provider-native subagent", () =>
+    Effect.gen(function* () {
+      const fake = yield* makeFakePi;
+      const { runtime, takeEvent } = yield* openRuntime(fake);
+      const providerThread = yield* runtime.ensureThread({
+        threadId: THREAD_ID,
+        modelSelection: modelSelection("default"),
+        runtimePolicy,
+      });
+      yield* startTurn(runtime, providerThread);
+      yield* fake.takeRequest("prompt");
+      yield* fake.emit({ type: "agent_start" });
+      // The start phase carries no gentle-agents details, so it stays a plain tool item.
+      yield* fake.emit({
+        type: "tool_execution_start",
+        toolCallId: "call_run",
+        toolName: "subagent_run",
+        args: { task: "audit the auth flow", agent: "judgment-day" },
+      });
+      const beforeResult: Array<string> = [];
+      while (true) {
+        const event = yield* takeEvent(
+          (event) =>
+            event.type === "subagent.updated" ||
+            event.type === "background_work.updated" ||
+            (event.type === "turn_item.updated" &&
+              event.turnItem.type === "dynamic_tool" &&
+              event.turnItem.toolName === "subagent_run"),
+        );
+        if (event.type === "turn_item.updated") break;
+        beforeResult.push(event.type);
+      }
+      assert.deepEqual(beforeResult, []);
+      yield* fake.emit({
+        type: "tool_execution_end",
+        toolCallId: "call_run",
+        toolName: "subagent_run",
+        isError: false,
+        result: {
+          content: [{ type: "text", text: "auth flow is fine" }],
+          details: {
+            gentleAgents: {
+              taskId: "task-1",
+              agent: "judgment-day",
+              label: "Auth audit",
+              status: "completed",
+              mode: "task",
+              lastStep: "wrote the report",
+              model: "anthropic/claude-haiku-5-5",
+            },
+          },
+        },
+      });
+      const done = yield* takeEvent(
+        (event) => event.type === "subagent.updated" && event.subagent.status === "completed",
+      );
+      assert.isTrue(
+        done.type === "subagent.updated" &&
+          done.subagent.title === "Auth audit" &&
+          done.subagent.prompt === "audit the auth flow" &&
+          done.subagent.model === "anthropic/claude-haiku-5-5" &&
+          done.subagent.result === "auth flow is fine" &&
+          done.subagent.childThreadId === null,
+      );
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect("tracks a background gentle-agents task through its widget", () =>
+    Effect.gen(function* () {
+      const fake = yield* makeFakePi;
+      const { runtime, takeEvent } = yield* openRuntime(fake);
+      const providerThread = yield* runtime.ensureThread({
+        threadId: THREAD_ID,
+        modelSelection: modelSelection("default"),
+        runtimePolicy,
+      });
+      yield* startTurn(runtime, providerThread);
+      yield* fake.takeRequest("prompt");
+      yield* fake.emit({ type: "agent_start" });
+      yield* fake.emit({
+        type: "tool_execution_end",
+        toolCallId: "call_bg",
+        toolName: "subagent_run",
+        isError: false,
+        result: {
+          content: [{ type: "text", text: "Started scout in the background as task task-9." }],
+          details: {
+            gentleAgents: {
+              taskId: "task-9",
+              agent: "scout",
+              label: null,
+              status: "running",
+              mode: "background",
+              lastStep: "reading the adapter",
+              model: "anthropic/claude-haiku-5-5",
+            },
+          },
+        },
+      });
+      const running = yield* takeEvent(
+        (event) => event.type === "subagent.updated" && event.subagent.status === "running",
+      );
+      assert.isTrue(
+        running.type === "subagent.updated" &&
+          running.subagent.title === "scout" &&
+          running.subagent.progress === "reading the adapter" &&
+          running.subagent.result === null &&
+          running.subagent.childThreadId === null,
+      );
+      const runningId = running.type === "subagent.updated" ? running.subagent.id : null;
+      const widget = (tasks: ReadonlyArray<unknown>) =>
+        fake.emit({
+          type: "extension_ui_request",
+          id: "gentle-widget",
+          method: "setWidget",
+          widgetKey: "gentle-agents",
+          widgetLines: [
+            JSON.stringify({ schema: "gentle-agents.activity/v1", summary: "tasks", tasks }),
+          ],
+        });
+      const task = (status: string, lastStep: string) => ({
+        summary: {
+          id: "task-9",
+          agent: "scout",
+          label: "",
+          prompt: "audit the auth flow",
+          status,
+          createdAt: 1_000,
+          startedAt: 2_000,
+          endedAt: status === "running" ? null : 3_000,
+          lastStep,
+          lastActivityAt: 3_000,
+          turns: 2,
+          toolCalls: 4,
+          error: null,
+        },
+        thread: { version: 1, dropped: 0, items: [] },
+      });
+      // Live state arrives only in the widget; the thread holds background work while it says so.
+      yield* widget([task("running", "reading the adapter")]);
+      const held = yield* takeEvent((event) => event.type === "background_work.updated");
+      assert.isTrue(held.type === "background_work.updated" && held.pending === true);
+      // A snapshot that drops the task is not its end, but it must not hold the thread either.
+      yield* widget([]);
+      yield* fake.emit({
+        type: "tool_execution_end",
+        toolCallId: "marker",
+        toolName: "marker",
+        result: { content: [{ type: "text", text: "after" }] },
+      });
+      const dropped: Array<string> = [];
+      while (true) {
+        const event = yield* takeEvent(
+          (event) =>
+            event.type === "subagent.updated" ||
+            event.type === "background_work.updated" ||
+            (event.type === "turn_item.updated" &&
+              event.turnItem.type === "dynamic_tool" &&
+              event.turnItem.toolName === "marker"),
+        );
+        if (event.type === "turn_item.updated") break;
+        dropped.push(
+          event.type === "background_work.updated" ? `pending:${event.pending}` : event.type,
+        );
+      }
+      assert.deepEqual(dropped, ["pending:false"]);
+      yield* widget([task("completed", "wrote the report")]);
+      const done = yield* takeEvent(
+        (event) => event.type === "subagent.updated" && event.subagent.status === "completed",
+      );
+      assert.isTrue(
+        done.type === "subagent.updated" &&
+          done.subagent.result === null &&
+          done.subagent.progress === undefined,
+      );
+      assert.equal(done.type === "subagent.updated" ? done.subagent.id : null, runningId);
+    }).pipe(Effect.scoped, Effect.provide(layerTest)),
+  );
+
+  it.effect("settles a background gentle-agents task from its result message", () =>
+    Effect.gen(function* () {
+      const fake = yield* makeFakePi;
+      const { runtime, takeEvent } = yield* openRuntime(fake);
+      const providerThread = yield* runtime.ensureThread({
+        threadId: THREAD_ID,
+        modelSelection: modelSelection("default"),
+        runtimePolicy,
+      });
+      yield* startTurn(runtime, providerThread);
+      yield* fake.takeRequest("prompt");
+      yield* fake.emit({ type: "agent_start" });
+      yield* fake.emit({
+        type: "tool_execution_end",
+        toolCallId: "call_bg",
+        toolName: "subagent_run",
+        isError: false,
+        result: {
+          content: [{ type: "text", text: "Started scout in the background as task task-9." }],
+          details: {
+            gentleAgents: {
+              taskId: "task-9",
+              agent: "scout",
+              label: null,
+              status: "running",
+              mode: "background",
+              lastStep: "reading the adapter",
+              model: "anthropic/claude-haiku-5-5",
+            },
+          },
+        },
+      });
+      const running = yield* takeEvent(
+        (event) => event.type === "subagent.updated" && event.subagent.status === "running",
+      );
+      const runningId = running.type === "subagent.updated" ? running.subagent.id : null;
+      // gentle-pi reports a background task's end as a steer message, not just in the widget.
+      const resultMessage = {
+        role: "custom",
+        customType: "gentle-agents.result",
+        content: "scout finished: the auth flow is fine",
+        display: true,
+        details: {
+          gentleAgents: {
+            taskId: "task-9",
+            agent: "scout",
+            label: null,
+            status: "completed",
+            mode: "background",
+            lastStep: "wrote the report",
+            model: "anthropic/claude-haiku-5-5",
+          },
+        },
+      };
+      yield* fake.emit({ type: "message_start", message: resultMessage });
+      yield* fake.emit({ type: "message_end", message: resultMessage });
+      yield* fake.emit({
+        type: "tool_execution_end",
+        toolCallId: "marker",
+        toolName: "marker",
+        result: { content: [{ type: "text", text: "after" }] },
+      });
+      const completedIds: Array<string | null> = [];
+      const conversation: Array<string> = [];
+      while (true) {
+        const event = yield* takeEvent(
+          (event) =>
+            event.type === "subagent.updated" ||
+            (event.type === "turn_item.updated" &&
+              (event.turnItem.type === "user_message" ||
+                event.turnItem.type === "assistant_message" ||
+                (event.turnItem.type === "dynamic_tool" && event.turnItem.toolName === "marker"))),
+        );
+        if (event.type === "turn_item.updated" && event.turnItem.type === "dynamic_tool") {
+          break;
+        }
+        if (event.type === "turn_item.updated") conversation.push(event.turnItem.type);
+        if (event.type === "subagent.updated" && event.subagent.status === "completed") {
+          assert.isTrue(event.subagent.result === "scout finished: the auth flow is fine");
+          completedIds.push(event.subagent.id);
+        }
+      }
+      assert.deepEqual(completedIds, [runningId]);
+      assert.deepEqual(conversation, []);
     }).pipe(Effect.scoped, Effect.provide(layerTest)),
   );
 
